@@ -2,6 +2,25 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [4.3.0] - 2026-07-26
+
+### Added
+- **🔍 Rebuilt Duplicate Detection**: Replaced the old pairs-only 50KB hash with a 3-stage pipeline — free size-bucketing, then a partial 64KB hash, then a full SHA-256 for survivors — finding true n-way groups across all subfolders instead of just pairs. Adds a full review UI: thumbnails, per-file keep/delete, `Keep oldest / newest / shortest path` auto-select, and two confirms before deleting (with an extra warning if a group would lose every copy).
+- **📄 JSON / Workflow Viewer**: New dialog for inspecting a file's raw embedded metadata — separate tabs for ComfyUI's `prompt` (API form) and `workflow` (UI graph), or A1111's plain-text `parameters`. Syntax highlighting, a clickable node outline (id/type/title), in-place search with match stepping, and copy/save-to-disk.
+- **⚡ Pagination & Lazy Thumbnails**: Page-size selector (100/200/500/1000/All, default 200, remembered) plus `[`/`]` shortcuts, combined with IntersectionObserver-based lazy loading so thumbnails only decode once scrolled into view. Measured at 10,000 items: ~60ms render, 200 DOM rows, 10 files opened, 10MB heap — previously 3,000 images was enough to permanently wedge the renderer.
+- **🎬 More Formats**: Added `gif`, `mov`, `mkv`. Format lists are now a single declaration (`RX_MEDIA`/`RX_VIDEO`) instead of two regexes that could drift apart. Undecodable containers (Matroska, some `.mov` codecs) show a labelled 🎬 fallback tile instead of a blank thumbnail.
+- **🛡️ Fix & Save Safety Guards**: Files with no recognisable image header are rejected before any write, and animated GIF/WebP now prompt first since conversion keeps one frame and deletes the original.
+- **New shortcuts**: `D` find duplicates, `[` / `]` page back/forward.
+
+### Fixed
+- **Empty file list on first open**: `fullScan()` finished by filtering to files whose parent is the root, so a library kept in subfolders showed nothing until you clicked into a folder and back. Now matches the "All Files" sidebar behavior.
+- **Wrong image resolution on most images**: The Size field read `width`/`height` off the workflow's `EmptyLatentImage` node, which are frequently node references (e.g. `["49", 0]`) rather than literals, producing display values like `49,0x49,1`. Dimensions now come from the file's own header (PNG `IHDR`, JPEG `SOFn`, WebP, GIF), correct regardless of node ids, custom nodes, or upscales.
+- **"Fix & Save" hung forever on videos**: The non-PNG branch awaited an `<img>`'s `onload`, but video blobs fire `onerror` instead, which was never handled. The image load now races `onload`/`onerror`/timeout so no failure mode can hang it.
+- **JSON button did nothing**: Previously called a function that was never defined, throwing a silent `ReferenceError`. Replaced with the JSON/Workflow Viewer above.
+
+### Removed
+- **Firefox Edition**: This fork is Chrome/Edge only going forward; the File System Access API feature set (true file management, duplicate cleanup, direct overwrite) has no Firefox equivalent to keep parity with.
+
 ## [4.2.1] - 2025-12-24
 
 ### Added
