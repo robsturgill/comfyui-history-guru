@@ -43,3 +43,8 @@ Thumbs.db
 *.bak
 backup/
 *.log
+
+# Local test data (never commit)
+samples/
+samples -backup/
+docs/

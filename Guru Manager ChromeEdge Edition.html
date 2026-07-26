@@ -79,11 +79,84 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 .card.favorite{border-color:#fbbf24}.card.selected{border-color:var(--acc)!important;border-width:2px;box-shadow:0 0 15px var(--acc)}.card.selected::before{content:'';position:absolute;inset:0;background:var(--sel-bg);pointer-events:none;z-index:5}.list-row.selected{background:var(--sel-bg)!important}.favorite-star{position:absolute;top:8px;right:8px;font-size:1.2rem;cursor:pointer;background:rgba(0,0,0,0.5);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0.7;z-index:10}.favorite-star:hover{opacity:1}.card:hover .favorite-star{opacity:1}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;display:flex;align-items:center;gap:12px;min-width:250px;animation:toastSlide 0.3s ease}.toast.success{border-left:4px solid #4ade80}.toast.error{border-left:4px solid #ef4444}.toast.info{border-left:4px solid var(--acc)}@keyframes toastSlide{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .context-menu{position:fixed;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 0;min-width:150px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none}.context-menu-item{padding:8px 16px;cursor:pointer;color:var(--txt);font-size:0.85rem}.context-menu-item:hover{background:var(--side)}.context-menu-item.disabled{opacity:0.5;cursor:not-allowed}
+/* DUPLICATES VIEW */
+.dup-view{margin:-20px;padding:0}
+.dup-bar{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--bd);padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.dup-summary{font-size:0.9rem;color:var(--mut)}.dup-summary strong{color:var(--txt)}
+.dup-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+.dup-btn{background:var(--card);border:1px solid var(--bd);color:var(--txt);padding:7px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:600}
+.dup-btn:hover{border-color:var(--acc);color:var(--acc)}
+.dup-btn.danger{background:#ef4444;border-color:#ef4444;color:#fff}.dup-btn.danger:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+.dup-btn:disabled{opacity:0.4;cursor:not-allowed}.dup-btn.danger:disabled:hover{background:#ef4444}
+.dup-groups{padding:20px;display:flex;flex-direction:column;gap:18px;padding-bottom:120px}
+.dup-group{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.dup-group-head{padding:10px 16px;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:0.78rem;color:var(--mut)}
+.dup-gtitle{font-weight:800;color:var(--txt);font-size:0.9rem}
+.dup-hash{font-family:monospace;font-size:0.68rem;opacity:0.55;margin-left:auto}
+.dup-files{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;padding:14px}
+.dup-file{display:flex;gap:12px;border:1px solid var(--bd);border-radius:10px;padding:10px;background:var(--bg);align-items:center;transition:border-color .15s,opacity .15s}
+.dup-file.keep{border-color:#4ade80;box-shadow:inset 0 0 0 1px rgba(74,222,128,0.35)}
+.dup-file.marked{border-color:#ef4444;opacity:.6}
+.dup-thumb{width:86px;height:86px;flex-shrink:0;border-radius:8px;overflow:hidden;background:var(--card);cursor:zoom-in;display:flex;align-items:center;justify-content:center}
+.dup-thumb img{width:100%;height:100%;object-fit:cover}
+.dup-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.dup-name{font-size:0.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dup-path{font-family:monospace;font-size:0.68rem;color:var(--mut);word-break:break-all;line-height:1.35}
+.dup-meta{font-size:0.68rem;color:var(--mut)}
+.dup-choice{display:flex;flex-direction:column;gap:8px;font-size:0.72rem;color:var(--mut);flex-shrink:0}
+.dup-choice label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-weight:600}
+.dup-choice input{accent-color:var(--acc);cursor:pointer;margin:0}
+.dup-choice .dup-del-lbl{color:#f87171}
+.dup-empty,.dup-progress{padding:70px 20px;text-align:center;color:var(--mut)}
+.dup-empty h3,.dup-progress h3{color:var(--txt);margin:0 0 8px}
+.dup-track{max-width:420px;margin:18px auto 0;height:8px;background:var(--card);border:1px solid var(--bd);border-radius:99px;overflow:hidden}
+.dup-fill{height:100%;background:var(--acc);width:0%;transition:width .2s}
+.dup-lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9000;display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.dup-lightbox img{max-width:92vw;max-height:86vh;object-fit:contain}
+.dup-lb-cap{position:absolute;bottom:24px;left:0;right:0;text-align:center;color:#fff;font-family:monospace;font-size:0.8rem;text-shadow:0 1px 4px #000}
+.vid-fallback{width:100%;height:100%;min-width:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--card);color:var(--mut);font-size:0.65rem;font-weight:700;letter-spacing:.5px;text-align:center;border-radius:4px}
+.vid-fallback .vf-icon{font-size:1.5rem;line-height:1}
+.pager{display:flex;align-items:center;gap:4px}
+.pg-btn{background:transparent;border:1px solid var(--bd);color:var(--txt);width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:0.9rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.pg-btn:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.pg-btn:disabled{opacity:.35;cursor:default}
+.pg-info{color:var(--mut);font-size:0.75rem;font-weight:600;padding:0 6px;white-space:nowrap}
+.pg-size{background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;font-size:0.72rem;padding:3px 4px;cursor:pointer;margin-left:4px}
+/* JSON / WORKFLOW VIEWER */
+.json-dialog{background:var(--side);border:1px solid var(--bd);border-radius:12px;width:min(1200px,94vw);height:86vh;display:flex;flex-direction:column;overflow:hidden}
+.json-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bd);background:var(--head);flex-wrap:wrap}
+.json-title{font-family:monospace;font-size:0.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.json-tabs{display:flex;gap:4px}
+.json-tab{background:transparent;border:1px solid var(--bd);color:var(--mut);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.74rem;font-weight:700;font-family:monospace}
+.json-tab:hover{color:var(--txt);border-color:var(--acc)}
+.json-tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
+.json-tools{margin-left:auto;display:flex;align-items:center;gap:6px}
+.json-find{background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;padding:5px 9px;font-size:0.78rem;outline:none;width:200px}
+.json-find:focus{border-color:var(--acc)}
+.json-count{color:var(--mut);font-size:0.72rem;font-weight:600;min-width:78px;text-align:right;white-space:nowrap}
+.json-body{flex:1;display:flex;min-height:0}
+.json-outline{width:270px;flex-shrink:0;border-right:1px solid var(--bd);overflow-y:auto;background:var(--bg);padding:6px 0}
+.json-node{padding:5px 12px;cursor:pointer;display:flex;align-items:baseline;gap:7px;font-size:0.74rem;border-left:2px solid transparent}
+.json-node:hover{background:var(--card);border-left-color:var(--acc)}
+.jn-id{font-family:monospace;color:var(--mut);font-size:0.68rem;flex-shrink:0;min-width:26px}
+.jn-type{color:var(--txt);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jn-title{color:var(--mut);font-size:0.68rem;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.json-code{flex:1;overflow:auto;padding:12px 16px;font-family:ui-monospace,Consolas,monospace;font-size:0.76rem;line-height:1.55;background:var(--bg);white-space:pre}
+.jl{min-height:1.55em}
+.jl.flash{background:var(--chip-bg);border-radius:3px;transition:background 1s}
+.jk{color:var(--acc);font-weight:600}
+.js-str{color:#4ade80}
+.jnum{color:#fbbf24}
+.jbool{color:#f87171;font-weight:600}
+.json-code mark.jm{background:rgba(251,191,36,0.35);color:inherit;border-radius:2px}
+.json-code mark.jm.cur{background:#fbbf24;color:#000}
+.json-empty{padding:20px 14px;color:var(--mut);font-size:0.78rem;line-height:1.5}
+.detail-media.vid-fallback{width:320px;height:200px;font-size:0.8rem;border-radius:12px}
 </style>
 </head>
 <body class="mode-list" data-theme="dark">
 <header>
-    <h1>History<span>Guru</span> <span class="version">ChromeEdge Edition</span></h1>
+    <h1 title="History Guru — ChromeEdge Edition">History<span>Guru</span></h1>
     <div class="s-box"><input type="text" id="sIn" class="s-in" placeholder="Search..."></div>
     <button class="btn" onclick="initFileSystem()">Open Folder</button>
     <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt)" onclick="fullScan()">↻</button>
@@ -115,6 +188,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
                 <input type="range" class="thumb-slider" min="128" max="320" step="48" value="224" id="thumbSlider" oninput="updateThumbSize(this.value)">
                 <span>Large</span>
             </div>
+            <div id="pager" class="pager"></div>
             <span id="fCount" style="color:var(--mut)">0 items</span>
         </div>
     </div>
@@ -158,7 +232,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
                 <div id="loraEditor"></div>
             </div>
             <div><span class="lbl">Resources</span><div id="mRes"></div></div>
-            <div class="bot-bar"><button class="btn-full" onclick="saveJSON()">JSON</button><button class="btn-full btn-pri" onclick="fixSave()">Fix & Save</button></div>
+            <div class="bot-bar"><button class="btn-full" onclick="viewJSON()" title="View the embedded workflow / metadata">JSON</button><button class="btn-full btn-pri" onclick="fixSave()">Fix & Save</button></div>
         </div>
     </aside>
 </div>
@@ -166,6 +240,28 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 <div id="wel" class="overlay"><h2>History Guru ChromeEdge Edition</h2><p style="color:var(--mut);margin-bottom:20px">Hello Creator</p><button class="btn" onclick="initFileSystem()">Open Folder</button></div>
 <div id="contextMenu" class="context-menu">
     <div class="context-menu-item" onclick="contextDelete()" style="color:#ef4444">Delete</div>
+</div>
+<div id="jsonOverlay" class="overlay hidden">
+    <div class="json-dialog">
+        <div class="json-head">
+            <div id="jsonTitle" class="json-title">file.png</div>
+            <div id="jsonTabs" class="json-tabs"></div>
+            <div class="json-tools">
+                <input id="jsonSearch" class="json-find" type="text" placeholder="Search keys, values, nodes…" spellcheck="false"
+                       oninput="jsonSearch(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();jsonStep(event.shiftKey?-1:1)}">
+                <span id="jsonCount" class="json-count"></span>
+                <button class="pg-btn" onclick="jsonStep(-1)" title="Previous match (Shift+Enter)">‹</button>
+                <button class="pg-btn" onclick="jsonStep(1)" title="Next match (Enter)">›</button>
+                <button class="dup-btn" onclick="copyJson()" title="Copy this chunk">Copy</button>
+                <button class="dup-btn" onclick="downloadJson()" title="Download this chunk">Save</button>
+                <button class="dup-btn" onclick="closeJsonDialog()" title="Close (Esc)">✕</button>
+            </div>
+        </div>
+        <div class="json-body">
+            <div id="jsonOutline" class="json-outline"></div>
+            <div id="jsonCode" class="json-code"></div>
+        </div>
+    </div>
 </div>
 <div id="helpOverlay" class="overlay hidden">
     <div style="background:var(--side);border:1px solid var(--bd);border-radius:12px;padding:30px;max-width:900px;width:90%;max-height:85vh;overflow-y:auto;">
@@ -182,9 +278,13 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 let rH=null,db=null,cache=new Map(),fReg=new Map(),dReg=new Map(),objURLs=new Set();
 let cDir=null,currP="",cFiles=[],vMode='list',aIdx=-1,cItem=null,favorites=new Set(),showFavoritesOnly=false,sortBy='date',sortDirection='desc',selectedIndex=-1,selectedItems=new Set();
 let currentLoras = [];
+let pageSize=200, curPage=0, mediaIO=null;
 
 function clearURLs(){ if(objURLs.size > 100) { objURLs.forEach(u=>URL.revokeObjectURL(u)); objURLs.clear() } }
 const DB="GuruV610", loraPattern = /<lora:([^:>]+)(?::([^:>]+))?(?::([^:>]+))?>/g;
+// Single source of truth for supported formats - RX_VIDEO must stay a subset of RX_MEDIA, or a file
+// gets listed but never classified as video (or vice versa).
+const RX_MEDIA=/\.(png|jpe?g|webp|gif|mp4|webm|mov|mkv)$/i, RX_VIDEO=/\.(mp4|webm|mov|mkv)$/i;
 
 // FULLSCREEN FIX
 function exitFullscreenAndClose() {
@@ -283,8 +383,11 @@ const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectSt
 
 // FS
 async function initFileSystem(){try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
-async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);await dAll();await scD(rH,"");rTree();await opD(rH,"");document.getElementById('load').classList.add('hidden')}
-async function scD(h,p){for await(const e of h.values()){const ep=p?`${p}/${e.name}`:e.name;if(e.kind==='directory'){dReg.set(ep,e);await scD(e,ep)}else if(/\.(png|jpg|jpeg|webp|mp4|webm)$/i.test(e.name)){fReg.set(ep,e);if(!cache.has(ep))await proc(e,ep)}}}
+async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);await dAll();await scD(rH,"");rTree();await opD(null,"");document.getElementById('load').classList.add('hidden')}
+// NOTE: opD's filter is `!h || parentOf(file)===p`. Passing rH restricts the list to loose files
+// sitting directly in the root, so a library kept in subfolders renders empty. null = "All Files",
+// matching what the sidebar's All Files entry (which rTree marks active) already does.
+async function scD(h,p){for await(const e of h.values()){const ep=p?`${p}/${e.name}`:e.name;if(e.kind==='directory'){dReg.set(ep,e);await scD(e,ep)}else if(RX_MEDIA.test(e.name)){fReg.set(ep,e);if(!cache.has(ep))await proc(e,ep);else await backfillDim(e,ep)}}}
 
 // --- BRAIN (Accumulative Fix) ---
 async function decompressZlib(data) {try {const ds = new DecompressionStream('deflate-raw'); const writer = ds.writable.getWriter(); writer.write(data.slice(2, data.length - 4)); writer.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());} catch (e) {try {const ds = new DecompressionStream('deflate'); const writer = ds.writable.getWriter(); writer.write(data); writer.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());} catch(e2) { return null; }}}
@@ -472,7 +575,22 @@ function parseComfy(json) {
         if(nodeType.includes("IPAdapter") && inputs.ipadapter_file) resources.push({type:'IP-Adapter', name:inputs.ipadapter_file, str:inputs.weight || "1.0"});
     });
     const sizeNodes = ["EmptyLatentImage", "LatentUpscale", "LatentComposite", "EmptySD3LatentImage"];
-    const sizeNode=nodes.find(n=>sizeNodes.includes(n.class_type));if(sizeNode){const inputs=sizeNode.inputs||{};if(inputs.width&&inputs.height)meta.size=`${inputs.width}x${inputs.height}`}
+    // width/height are frequently node references (e.g. ["49",0]) rather than literals. Resolve them,
+    // and never emit a non-numeric value - interpolating the raw array produced sizes like "49,0x49,1".
+    const resolveNum=(val,d=0)=>{
+        if(typeof val==='number')return val;
+        if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
+        if(Array.isArray(val)&&val.length&&d<8){
+            const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
+            const inp=n.inputs||{},slot=val[1]===1?'height':'width';
+            if(typeof inp[slot]==='number')return inp[slot];
+            if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
+            for(const k of [slot,'value','number','int']){const r=resolveNum(inp[k],d+1);if(r!=null)return r}
+        }
+        return null;
+    };
+    const sizeNode=nodes.find(n=>sizeNodes.includes(n.class_type));
+    if(sizeNode){const inputs=sizeNode.inputs||{};const wv=resolveNum(inputs.width),hv=resolveNum(inputs.height);if(wv>0&&hv>0)meta.size=`${Math.round(wv)}x${Math.round(hv)}`}
     return {pos,neg,meta,resources};
 }
 
@@ -486,54 +604,410 @@ function parseA1111(text) {
 }
 
 // --- LOGIC ---
-async function proc(h,p){try{const f=await h.getFile(),vid=/\.(mp4|webm)$/i.test(f.name);let m=null;if(vid)m={meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t)}const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid};cache.set(p,i);dPut(i)}catch{}}
+// True pixel dimensions straight from the file header. This is ground truth: workflow metadata
+// records the *latent* size, which is wrong whenever the graph upscales/resizes, and is often a
+// node reference (["49",0]) rather than a number. Cheap - the header is at the front of the file.
+function readDims(buffer){
+    try{
+        const v=new DataView(buffer),b=new Uint8Array(buffer);
+        if(v.byteLength<16)return null;
+        // PNG: IHDR width/height sit at fixed offsets 16 and 20
+        if(v.getUint32(0)===0x89504E47)return{w:v.getUint32(16),h:v.getUint32(20)};
+        // GIF: logical screen descriptor, little-endian
+        if(b[0]===0x47&&b[1]===0x49&&b[2]===0x46)return{w:v.getUint16(6,true),h:v.getUint16(8,true)};
+        // WebP: RIFF....WEBP then a VP8 / VP8L / VP8X chunk
+        if(v.getUint32(0)===0x52494646&&v.getUint32(8)===0x57454250){
+            const cc=String.fromCharCode(b[12],b[13],b[14],b[15]);
+            if(cc==='VP8X')return{w:1+(b[24]|b[25]<<8|b[26]<<16),h:1+(b[27]|b[28]<<8|b[29]<<16)};
+            if(cc==='VP8L'){const n=b[21]|b[22]<<8|b[23]<<16|b[24]<<24;return{w:1+(n&0x3FFF),h:1+((n>>>14)&0x3FFF)}}
+            if(cc==='VP8 ')for(let i=20;i<Math.min(b.length-10,64);i++)
+                if(b[i]===0x9d&&b[i+1]===0x01&&b[i+2]===0x2a)
+                    return{w:(b[i+3]|b[i+4]<<8)&0x3FFF,h:(b[i+5]|b[i+6]<<8)&0x3FFF};
+            return null;
+        }
+        // JPEG: walk the marker chain to the first SOFn frame header
+        if(v.getUint16(0)===0xFFD8){
+            let o=2;
+            while(o<v.byteLength-9){
+                if(b[o]!==0xFF){o++;continue}
+                const mk=b[o+1];
+                if(mk===0xFF){o++;continue}
+                if(mk===0xD8||mk===0x01||(mk>=0xD0&&mk<=0xD7)){o+=2;continue}
+                if(mk===0xD9||mk===0xDA)break;                       // end of image / start of scan
+                const len=v.getUint16(o+2);
+                if(len<2)break;
+                if(mk>=0xC0&&mk<=0xCF&&mk!==0xC4&&mk!==0xC8&&mk!==0xCC)
+                    return{h:v.getUint16(o+5),w:v.getUint16(o+7)};    // note: height precedes width
+                o+=2+len;
+            }
+        }
+    }catch(e){}
+    return null;
+}
+const dimStr=d=>d&&d.w&&d.h?`${d.w}x${d.h}`:null;
 
-function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
+// Chrome decodes .mp4/.webm reliably but not every container - Matroska (.mkv) in particular, and
+// .mov only when it holds codecs Chrome knows. Swap an unplayable <video> for a labelled tile so it
+// doesn't just render blank.
+function vidFallback(el,name){
+    if(!el||el.tagName!=='VIDEO')return el;
+    el.onerror=()=>{
+        if(!el.parentNode)return;
+        const ph=document.createElement('div');
+        ph.className='vid-fallback'+(el.className?' '+el.className:'');
+        ph.title=name+" — this container isn't playable in Chrome";
+        ph.innerHTML=`<div class="vf-icon">🎬</div><div>${esc((name.split('.').pop()||'video').toUpperCase())}</div>`;
+        el.parentNode.replaceChild(ph,el);
+    };
+    return el;
+}
+
+// Walks GIF blocks properly rather than scanning for 0x2C bytes, which also occur inside LZW data
+// and would flag static GIFs as animated. Stops as soon as a second frame is seen.
+function gifFrameCount(b){
+    let o=13,frames=0;
+    if(b[10]&0x80)o+=3*(2<<(b[10]&7));              // global colour table
+    while(o<b.length){
+        const blk=b[o];
+        if(blk===0x3B)break;                        // trailer
+        if(blk===0x21){                             // extension: skip its sub-block chain
+            o+=2;while(o<b.length&&b[o])o+=b[o]+1;o++;
+        }else if(blk===0x2C){                       // image descriptor = one frame
+            if(++frames>1)return frames;
+            const lf=b[o+9];o+=10;
+            if(lf&0x80)o+=3*(2<<(lf&7));            // local colour table
+            o++;                                    // LZW minimum code size
+            while(o<b.length&&b[o])o+=b[o]+1;o++;
+        }else break;
+    }
+    return frames;
+}
+// True for multi-frame GIF and for WebP whose VP8X header sets the animation flag.
+function isAnimated(buffer){
+    try{
+        const b=new Uint8Array(buffer);
+        if(b[0]===0x47&&b[1]===0x49&&b[2]===0x46)return gifFrameCount(b)>1;
+        if(b[0]===0x52&&b[1]===0x49&&b[2]===0x46&&b[3]===0x46&&
+           String.fromCharCode(b[12],b[13],b[14],b[15])==='VP8X')return !!(b[20]&0x02);
+    }catch(e){}
+    return false;
+}
+
+async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name);let m=null,dim=null;if(vid)m={meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b))}const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim};cache.set(p,i);dPut(i)}catch{}}
+// Entries cached by an older build have no `dim`. Backfilling reads only the file's first 64KB
+// rather than re-running the full metadata parse.
+async function backfillDim(h,p){const it=cache.get(p);if(!it||it.v||it.dim!==undefined)return;try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
+
+function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
 function toggleView(){setView(vMode==='grid'?'list':'grid')}
 function toggleStats(){setView(vMode==='stats'?'list':'stats')}
-function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);if(meta.size&&meta.size!=="?")stats.sizes.set(meta.size,(stats.sizes.get(meta.size)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
+function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);const dispSize=item.dim||meta.size;if(dispSize&&dispSize!=="?")stats.sizes.set(dispSize,(stats.sizes.get(dispSize)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
 function toggleTheme(){const body=document.body;const currentTheme=body.getAttribute('data-theme')||'dark';const newTheme=currentTheme==='dark'?'light':'dark';body.setAttribute('data-theme',newTheme);localStorage.setItem('guru-theme',newTheme);const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=newTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${newTheme==='dark'?'Light':'Dark'} Mode`}}
 function toggleThumbnails(){const isOff=document.body.classList.toggle('no-thumbnails');if(isOff&&vMode==='grid')setView('list');localStorage.setItem('guru-thumbnails',isOff?'off':'on');updateThumbUI(!isOff);rend()}
 function updateThumbUI(show){const indicator=document.getElementById('thumbIndicator');if(indicator)indicator.style.color=show?'#4ade80':'#ef4444'}
 function updateThumbSize(val){document.documentElement.style.setProperty('--thumb-size',val+'px');localStorage.setItem('guru-thumb-size',val)}
-(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}})();
+(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}})();
 function toggleFavorite(path){if(favorites.has(path)){favorites.delete(path)}else{favorites.add(path)}localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));rend()}
-async function findDuplicates(){
-    showToast('Scanning for duplicates...','info');
-    const hashMap=new Map();const duplicates=[];let processed=0;
-    for(const [path,handle] of fReg.entries()){
-        try{
-            const file=await handle.getFile();
-            // Faster check: size first, then hash
-            const arrayBuffer=await file.slice(0,50000).arrayBuffer();
-            let hash=0;const view=new Uint8Array(arrayBuffer);
-            for(let i=0;i<view.length;i++){hash=((hash<<5)-hash+view[i])&0xffffffff}
-            const key = `${file.size}_${hash.toString(16)}`;
-            if(hashMap.has(key)){
-                duplicates.push({key,files:[hashMap.get(key),{path,name:file.name,size:file.size}]})
-            }else{
-                hashMap.set(key,{path,name:file.name,size:file.size})
-            }
-            processed++;
-            if(processed%20===0)showToast(`Scanned ${processed} files...`,'info')
-        }catch(e){console.warn('Error hashing:',path,e)}
+// ===================== DUPLICATE DETECTION =====================
+// Content-based, filename-independent, spans every subfolder under the opened root.
+// Three escalating stages so 1000s of images stay cheap:
+//   1. File size      - metadata only, no bytes read. Unique size => cannot be a duplicate.
+//   2. Partial hash   - first + last 64KB of the size-collision survivors.
+//   3. Full SHA-256   - whole file, only for partial-hash survivors. Cached in IndexedDB.
+const DUP_PARTIAL=65536, DUP_CONC=8;
+let dupGroups=[], dupScanState=null, dupScanned=0;
+
+function fmtBytes(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
+function fmtWhen(ms){if(!ms)return'';const d=new Date(ms);return d.toLocaleDateString('en-US')+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function hexOf(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i++)s+=(b[i]<16?'0':'')+b[i].toString(16);return s}
+// Fallback for the (unlikely) case crypto.subtle is unavailable: 128-bit FNV-style mix.
+function jsHash(bytes){
+    const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+    let h1=0x811c9dc5,h2=0xc2b2ae35,h3=0x27d4eb2f,h4=0x165667b1;
+    for(let i=0;i<b.length;i++){const v=b[i];
+        h1=Math.imul(h1^v,16777619);
+        h2=Math.imul(h2^(v+i),2246822519);
+        h3=Math.imul(h3^v,3266489917)^(h1>>>13);
+        h4=Math.imul(h4^v,668265263)^(h2>>>15);
     }
-    if(duplicates.length===0){showToast('No duplicates found!','success')}
-    else{
-        const msg=`Found ${duplicates.length} duplicate group(s).`;
-        console.log('Duplicates:',duplicates);
-        showToast(msg,'error');
-    }
+    return [h1,h2,h3,h4].map(x=>(x>>>0).toString(16).padStart(8,'0')).join('')
 }
+async function digestHex(bytes){
+    if(window.crypto&&crypto.subtle&&crypto.subtle.digest){
+        try{return hexOf(await crypto.subtle.digest('SHA-256',bytes))}catch(e){}
+    }
+    return jsHash(bytes)
+}
+
+// Simple worker pool so hashing overlaps disk I/O instead of running strictly serially.
+async function dupPool(items,fn,conc,onDone){
+    let next=0,done=0;const n=Math.max(1,Math.min(conc,items.length));
+    await Promise.all(Array.from({length:n},async()=>{
+        for(;;){
+            const k=next++;if(k>=items.length)return;
+            try{await fn(items[k])}catch(e){console.warn('Duplicate scan skipped an item:',e)}
+            done++;if(onDone&&(done%5===0||done===items.length))onDone(done,items.length)
+        }
+    }))
+}
+// Returns only the buckets that contain more than one member.
+function dupBucket(list,keyFn){
+    const m=new Map();
+    for(const r of list){const k=keyFn(r);let a=m.get(k);if(!a){a=[];m.set(k,a)}a.push(r)}
+    return [...m.values()].filter(a=>a.length>1)
+}
+
+async function dupPartialHash(r){
+    const f=await r.handle.getFile();
+    let bytes;
+    if(f.size<=DUP_PARTIAL*2){bytes=new Uint8Array(await f.arrayBuffer());r.wholeFileHashed=true}
+    else{
+        const head=new Uint8Array(await f.slice(0,DUP_PARTIAL).arrayBuffer());
+        const tail=new Uint8Array(await f.slice(f.size-DUP_PARTIAL).arrayBuffer());
+        bytes=new Uint8Array(head.length+tail.length);bytes.set(head);bytes.set(tail,head.length)
+    }
+    return digestHex(bytes)
+}
+async function dupFullHash(r){
+    const c=cache.get(r.path);
+    if(c&&c.sha&&c.shaSize===r.size&&c.shaMtime===r.mtime)return c.sha;
+    const f=await r.handle.getFile();
+    const hex=await digestHex(new Uint8Array(await f.arrayBuffer()));
+    if(c){c.sha=hex;c.shaSize=r.size;c.shaMtime=r.mtime;dPut(c)}
+    return hex
+}
+
+function setDupProgress(phase,done,total){
+    dupScanState={phase,done,total};
+    const t=document.getElementById('dupProgTxt');
+    if(t)t.textContent=`${phase} — ${done} / ${total}`;
+    const f=document.getElementById('dupProgFill');
+    if(f)f.style.width=(total?Math.round(done/total*100):0)+'%'
+}
+
+// Header button: toggles out of the view, otherwise kicks off a fresh scan.
+function findDuplicates(){
+    if(vMode==='dups'&&!dupScanState){setView('list');return}
+    if(!rH||fReg.size===0){showToast('Open a folder first.','error');return}
+    scanDuplicates()
+}
+
+async function scanDuplicates(){
+    if(dupScanState)return;
+    dupGroups=[];
+    setDupProgress('Reading file sizes',0,fReg.size);
+    setView('dups');
+    try{
+        const recs=[];
+        await dupPool([...fReg.entries()],async([path,handle])=>{
+            const f=await handle.getFile();
+            recs.push({path,name:f.name,size:f.size,mtime:f.lastModified,handle})
+        },16,(d,t)=>setDupProgress('Reading file sizes',d,t));
+        dupScanned=recs.length;
+
+        // Stage 1 -> 2: only files sharing an exact byte size are worth hashing.
+        const stage2=dupBucket(recs,r=>r.size).flat();
+        setDupProgress('Hashing candidates',0,stage2.length);
+        await dupPool(stage2,async r=>{r.partial=await dupPartialHash(r)},DUP_CONC,(d,t)=>setDupProgress('Hashing candidates',d,t));
+
+        // Stage 2 -> 3: confirm survivors with a full-content hash.
+        const stage3=dupBucket(stage2,r=>r.size+':'+r.partial).flat();
+        const needFull=stage3.filter(r=>!r.wholeFileHashed);
+        setDupProgress('Verifying full contents',0,needFull.length);
+        await dupPool(needFull,async r=>{r.full=await dupFullHash(r)},DUP_CONC,(d,t)=>setDupProgress('Verifying full contents',d,t));
+        stage3.forEach(r=>{if(!r.full)r.full=r.partial});
+
+        dupGroups=dupBucket(stage3,r=>r.full).map(files=>{
+            files.sort((a,b)=>(a.mtime-b.mtime)||a.path.localeCompare(b.path));
+            return{hash:files[0].full,size:files[0].size,files:files.map(f=>({path:f.path,name:f.name,size:f.size,mtime:f.mtime,handle:f.handle,del:false}))}
+        });
+        // Biggest reclaimable savings first.
+        dupGroups.sort((a,b)=>(b.size*(b.files.length-1))-(a.size*(a.files.length-1)));
+        dupGroups.forEach((g,i)=>g.id=i);
+    }catch(e){
+        console.error('Duplicate scan failed:',e);
+        showToast('Duplicate scan failed: '+e.message,'error');
+    }finally{
+        dupScanState=null;
+        rend();
+    }
+    const dupFiles=dupGroups.reduce((n,g)=>n+g.files.length,0);
+    if(!dupGroups.length)showToast(`No duplicates among ${dupScanned} files.`,'success');
+    else showToast(`${dupGroups.length} duplicate group(s), ${dupFiles} files.`,'info');
+}
+
+function renderDuplicates(c){
+    if(dupScanState){
+        c.innerHTML=`<div class="dup-progress"><div class="spin" style="margin:0 auto 20px"></div>
+            <h3 id="dupProgTxt">${esc(dupScanState.phase)} — ${dupScanState.done} / ${dupScanState.total}</h3>
+            <div class="dup-track"><div id="dupProgFill" class="dup-fill"></div></div>
+            <p style="font-size:0.8rem;max-width:560px;margin:16px auto 0">Comparing by size, then a partial hash, then a full SHA-256. Matches are found by content, so renamed copies and copies in other subfolders are all caught.</p></div>`;
+        document.getElementById('fCount').innerText='scanning…';
+        return
+    }
+    if(!dupGroups.length){
+        c.innerHTML=`<div class="dup-empty"><h3>No duplicates found</h3>
+            <p>${dupScanned?`Compared ${dupScanned} files by content.`:'Run a scan to compare every file under the opened folder.'}</p>
+            <button class="dup-btn" style="margin-top:18px" onclick="scanDuplicates()">Scan again</button></div>`;
+        document.getElementById('fCount').innerText='0 duplicate groups';
+        return
+    }
+    const totalFiles=dupGroups.reduce((n,g)=>n+g.files.length,0);
+    const reclaim=dupGroups.reduce((n,g)=>n+g.size*(g.files.length-1),0);
+    document.getElementById('fCount').innerText=`${dupGroups.length} duplicate groups`;
+
+    const groupsHtml=dupGroups.map((g,gi)=>{
+        const files=g.files.map((f,fi)=>`
+            <div class="dup-file" id="dupf-${gi}-${fi}">
+                <div class="dup-thumb" data-g="${gi}" data-i="${fi}" onclick="dupPreview(${gi},${fi})" title="Click to preview"><img alt=""></div>
+                <div class="dup-info">
+                    <div class="dup-name" title="${esc(f.name)}">${esc(f.name)}</div>
+                    <div class="dup-path">${esc(f.path)}</div>
+                    <div class="dup-meta">${fmtBytes(f.size)} · ${fmtWhen(f.mtime)}</div>
+                </div>
+                <div class="dup-choice">
+                    <label title="Keep this copy, mark the rest of the group for deletion"><input type="radio" name="dupkeep-${gi}" onchange="dupKeep(${gi},${fi})"> Keep</label>
+                    <label class="dup-del-lbl" title="Mark this file for deletion"><input type="checkbox" onchange="dupMark(${gi},${fi},this.checked)"> Delete</label>
+                </div>
+            </div>`).join('');
+        return `<div class="dup-group">
+            <div class="dup-group-head">
+                <span class="dup-gtitle">Group ${gi+1}</span>
+                <span>${g.files.length} identical files · ${fmtBytes(g.size)} each · ${fmtBytes(g.size*(g.files.length-1))} reclaimable</span>
+                <span class="dup-hash">${esc(g.hash.slice(0,16))}…</span>
+            </div>
+            <div class="dup-files">${files}</div>
+        </div>`
+    }).join('');
+
+    c.innerHTML=`<div class="dup-bar">
+        <div class="dup-summary"><strong>${dupGroups.length}</strong> duplicate group(s) · <strong>${totalFiles}</strong> files · <strong>${fmtBytes(reclaim)}</strong> reclaimable</div>
+        <div class="dup-actions">
+            <button class="dup-btn" onclick="dupAutoSelect('oldest')">Keep oldest</button>
+            <button class="dup-btn" onclick="dupAutoSelect('newest')">Keep newest</button>
+            <button class="dup-btn" onclick="dupAutoSelect('shortest')">Keep shortest path</button>
+            <button class="dup-btn" onclick="dupAutoSelect('none')">Clear marks</button>
+            <button class="dup-btn" onclick="scanDuplicates()">Rescan</button>
+            <button id="dupDelBtn" class="dup-btn danger" onclick="deleteMarkedDuplicates()" disabled>Delete 0 files</button>
+        </div>
+    </div><div class="dup-groups">${groupsHtml}</div>`;
+
+    dupGroups.forEach((g,gi)=>syncDupGroupUI(gi));
+    updateDupDeleteBtn();
+    attachDupThumbs(c);
+}
+
+// Thumbnails load lazily - a large duplicate set would otherwise open every file at once.
+function attachDupThumbs(root){
+    const io=new IntersectionObserver((entries,obs)=>{
+        entries.forEach(e=>{if(!e.isIntersecting)return;obs.unobserve(e.target);loadDupThumb(e.target)})
+    },{root:document.querySelector('.grid-scroll'),rootMargin:'300px'});
+    root.querySelectorAll('.dup-thumb').forEach(el=>io.observe(el))
+}
+async function loadDupThumb(el){
+    const g=dupGroups[+el.dataset.g];if(!g)return;
+    const f=g.files[+el.dataset.i];if(!f)return;
+    try{
+        const u=URL.createObjectURL(await f.handle.getFile());objURLs.add(u);
+        const img=el.querySelector('img');if(img)img.src=u
+    }catch(e){console.warn('Thumbnail failed for',f.path,e)}
+}
+async function dupPreview(gi,fi){
+    const f=dupGroups[gi]&&dupGroups[gi].files[fi];if(!f)return;
+    try{
+        const u=URL.createObjectURL(await f.handle.getFile());objURLs.add(u);
+        const lb=document.createElement('div');lb.className='dup-lightbox';
+        lb.innerHTML=`<img src="${u}" alt=""><div class="dup-lb-cap">${esc(f.path)} · ${fmtBytes(f.size)}</div>`;
+        const close=()=>{lb.remove();document.removeEventListener('keydown',onKey,true)};
+        const onKey=e=>{if(e.key==='Escape'){e.stopPropagation();e.preventDefault();close()}};
+        lb.onclick=close;
+        document.addEventListener('keydown',onKey,true);
+        document.body.appendChild(lb)
+    }catch(e){showToast('Could not open preview.','error')}
+}
+
+// --- selection ---
+function dupKeep(gi,fi){const g=dupGroups[gi];if(!g)return;g.files.forEach((f,i)=>f.del=(i!==fi));syncDupGroupUI(gi);updateDupDeleteBtn()}
+function dupMark(gi,fi,on){const g=dupGroups[gi];if(!g)return;g.files[fi].del=!!on;syncDupGroupUI(gi);updateDupDeleteBtn()}
+function dupAutoSelect(mode){
+    dupGroups.forEach((g,gi)=>{
+        if(mode==='none'){g.files.forEach(f=>f.del=false)}
+        else{
+            let keep=0;
+            g.files.forEach((f,i)=>{
+                const cur=g.files[keep];
+                if(mode==='oldest'&&f.mtime<cur.mtime)keep=i;
+                else if(mode==='newest'&&f.mtime>cur.mtime)keep=i;
+                else if(mode==='shortest'&&f.path.length<cur.path.length)keep=i;
+            });
+            g.files.forEach((f,i)=>f.del=(i!==keep))
+        }
+        syncDupGroupUI(gi)
+    });
+    updateDupDeleteBtn()
+}
+function syncDupGroupUI(gi){
+    const g=dupGroups[gi];if(!g)return;
+    const anyMarked=g.files.some(f=>f.del);
+    const survivors=g.files.filter(f=>!f.del);
+    g.files.forEach((f,fi)=>{
+        const el=document.getElementById(`dupf-${gi}-${fi}`);if(!el)return;
+        el.classList.toggle('marked',!!f.del);
+        el.classList.toggle('keep',anyMarked&&!f.del);
+        const cb=el.querySelector('input[type=checkbox]');if(cb)cb.checked=!!f.del;
+        const rb=el.querySelector('input[type=radio]');if(rb)rb.checked=(!f.del&&survivors.length===1)
+    })
+}
+function updateDupDeleteBtn(){
+    const btn=document.getElementById('dupDelBtn');if(!btn)return;
+    let n=0,bytes=0;
+    dupGroups.forEach(g=>g.files.forEach(f=>{if(f.del){n++;bytes+=f.size}}));
+    btn.disabled=(n===0);
+    btn.textContent=n?`Delete ${n} file${n===1?'':'s'} (${fmtBytes(bytes)})`:'Delete 0 files'
+}
+
+async function deleteMarkedDuplicates(){
+    const marked=[];
+    dupGroups.forEach(g=>g.files.forEach(f=>{if(f.del)marked.push(f)}));
+    if(!marked.length){showToast('Nothing is marked for deletion.','info');return}
+    const wipes=dupGroups.filter(g=>g.files.length&&g.files.every(f=>f.del));
+    if(wipes.length&&!confirm(`${wipes.length} group(s) have every copy marked — those images would be lost entirely, with no copy left.\n\nContinue anyway?`))return;
+    if(!confirm(`Permanently delete ${marked.length} file(s)?\n\nThis cannot be undone.`))return;
+
+    document.getElementById('load').classList.remove('hidden');
+    let ok=0,fail=0;
+    for(const f of marked){
+        try{
+            const name=f.path.split('/').pop();
+            const parentPath=f.path.includes('/')?f.path.substring(0,f.path.lastIndexOf('/')):"";
+            const parentHandle=parentPath?(dReg.get(parentPath)||rH):rH;
+            await parentHandle.removeEntry(name);
+            fReg.delete(f.path);cache.delete(f.path);await dDel(f.path);
+            selectedItems.delete(f.path);favorites.delete(f.path);
+            f.deleted=true;ok++
+        }catch(e){console.error('Failed to delete duplicate',f.path,e);fail++}
+    }
+    localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));
+    dupGroups.forEach(g=>{g.files=g.files.filter(f=>!f.deleted)});
+    dupGroups=dupGroups.filter(g=>g.files.length>1);
+    dupGroups.forEach((g,i)=>g.id=i);
+    dupScanned=fReg.size;
+    document.getElementById('load').classList.add('hidden');
+    showToast(fail?`Deleted ${ok} file(s), ${fail} failed — see console.`:`Deleted ${ok} duplicate file(s).`,fail?'error':'success');
+    await opD(cDir,currP)
+}
+// =================== END DUPLICATE DETECTION ===================
 let contextTarget=null,contextPath="",contextIsFile=false;
 function showContextMenu(e,element,path,isFile=false){e.preventDefault();contextTarget=element;contextPath=path;contextIsFile=isFile;const menu=document.getElementById('contextMenu');menu.style.display='block';menu.style.left=e.pageX+'px';menu.style.top=e.pageY+'px';document.addEventListener('click',hideContextMenu,{once:true})}
 function hideContextMenu(){document.getElementById('contextMenu').style.display='none';contextTarget=null;contextPath="";contextIsFile=false}
 async function contextDelete(){if(!contextPath)return;const name=contextPath.split('/').pop();if(!confirm(`Delete "${name}"? This cannot be undone.`))return;try{if(contextIsFile){const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);fReg.delete(contextPath);cache.delete(contextPath);await dDel(contextPath)}else{const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);dReg.delete(contextPath)}await fullScan();showToast('Deleted successfully','success')}catch(e){showToast('Delete failed: '+e.message,'error')}hideContextMenu()}
-function showHelp(){const content=document.getElementById('helpContent');content.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div><h3 style="color:var(--acc);margin-top:0;">⌨️ Keyboard Shortcuts</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🖱️ Mouse Actions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Select multiple (coming soon)</div><div><strong>Shift+Click</strong> Range select (coming soon)</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">📋 Functions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter images by name/metadata</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🎯 Tips</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Search works on filenames and metadata</div><div>• Theme preference is saved automatically</div></div></div></div>`;document.getElementById('helpOverlay').classList.remove('hidden')}
+function showHelp(){const content=document.getElementById('helpContent');content.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div><h3 style="color:var(--acc);margin-top:0;">⌨️ Keyboard Shortcuts</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[</kbd> / <kbd>]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🖱️ Mouse Actions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Select multiple (coming soon)</div><div><strong>Shift+Click</strong> Range select (coming soon)</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">📋 Functions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter images by name/metadata</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🎯 Tips</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Search works on filenames and metadata</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower "items per page" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a "Keep" copy per group, then delete the rest</div></div></div></div>`;document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
-async function opD(h,p){cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
+async function opD(h,p){cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
 async function applySort(){
     if(sortBy==='name'){
         cFiles.sort((a,b)=>{
@@ -574,6 +1048,7 @@ function sortByColumn(col){
         sortBy=col;
         sortDirection='asc';
     }
+    curPage=0;selectedIndex=-1;
     applySort().then(()=>rend());
 }
 function getSortArrow(col){
@@ -585,14 +1060,78 @@ async function changeSort(){
     if(val==='name'){sortBy='name';sortDirection='asc'}
     else if(val==='created'){sortBy='created';sortDirection='desc'}
     else{sortBy='date';sortDirection='desc'}
+    curPage=0;selectedIndex=-1;
     await applySort();rend();
 }
 async function toggleFavoritesFilter(){showFavoritesOnly=!showFavoritesOnly;const btn=document.getElementById('favFilterBtn');btn.classList.toggle('active',showFavoritesOnly);btn.title=showFavoritesOnly?'Show All Files':'Show Only Favorites';let currentPath=document.getElementById('pathDisplay').innerText.replace(' (Favorites Only)','');if(currentPath==='All Files')currentPath=null;await opD(cDir,currentPath)}
 
+// ===================== PAGINATION + LAZY MEDIA =====================
+// rend() builds a DOM node, opens a file, mints an object URL and triggers a full-resolution decode
+// for every item it renders. Those last three are the expensive ones. Pagination caps how many
+// items exist; lazy loading caps how many of them actually open their file. Both are needed - a
+// 200-item page still decodes 200 full-size PNGs (~700MB of bitmap) if it loads them all eagerly.
+const pageCount=()=>pageSize>0?Math.max(1,Math.ceil(cFiles.length/pageSize)):1;
+const pageStart=()=>pageSize>0?curPage*pageSize:0;
+const pageItems=()=>pageSize>0?cFiles.slice(pageStart(),pageStart()+pageSize):cFiles;
+function clampPage(){const pc=pageCount();if(curPage>=pc)curPage=pc-1;if(curPage<0)curPage=0}
+function gotoPage(p){
+    const pc=pageCount(),next=Math.max(0,Math.min(p,pc-1));
+    if(next===curPage)return;
+    curPage=next;selectedIndex=-1;rend();
+    const sc=document.querySelector('.grid-scroll');if(sc)sc.scrollTop=0;
+}
+// Keeps the selection visible when arrow keys walk past a page edge.
+function ensurePageFor(idx){if(pageSize<=0||idx<0)return false;const p=Math.floor(idx/pageSize);if(p===curPage)return false;curPage=p;return true}
+function setPageSize(v){
+    const anchor=selectedIndex>=0?selectedIndex:pageStart();
+    pageSize=+v||0;localStorage.setItem('guru-page-size',pageSize);
+    curPage=pageSize>0?Math.floor(anchor/pageSize):0;
+    rend();
+}
+function renderPager(){
+    const el=document.getElementById('pager');if(!el)return;
+    if(vMode!=='grid'&&vMode!=='list'){el.style.display='none';return}
+    el.style.display='flex';
+    const total=cFiles.length,pc=pageCount();
+    const from=total?pageStart()+1:0,to=pageSize>0?Math.min(pageStart()+pageSize,total):total;
+    const sizes=[100,200,500,1000].map(n=>`<option value="${n}"${pageSize===n?' selected':''}>${n} / page</option>`).join('');
+    el.innerHTML=`<button class="pg-btn" onclick="gotoPage(0)"${curPage===0?' disabled':''} title="First page">«</button>
+        <button class="pg-btn" onclick="gotoPage(${curPage-1})"${curPage===0?' disabled':''} title="Previous page ( [ )">‹</button>
+        <span class="pg-info">${from.toLocaleString()}–${to.toLocaleString()} of ${total.toLocaleString()}</span>
+        <button class="pg-btn" onclick="gotoPage(${curPage+1})"${curPage>=pc-1?' disabled':''} title="Next page ( ] )">›</button>
+        <button class="pg-btn" onclick="gotoPage(${pc-1})"${curPage>=pc-1?' disabled':''} title="Last page">»</button>
+        <select class="pg-size" onchange="setPageSize(this.value)" title="Items per page">${sizes}<option value="0"${pageSize===0?' selected':''}>All</option></select>`;
+}
+// A tile opens its file only once it scrolls near the viewport.
+function observeMedia(root){
+    if(mediaIO)mediaIO.disconnect();
+    mediaIO=new IntersectionObserver((entries,obs)=>{
+        entries.forEach(e=>{if(!e.isIntersecting)return;obs.unobserve(e.target);loadTileMedia(e.target)})
+    },{root:document.querySelector('.grid-scroll'),rootMargin:'400px'});
+    root.querySelectorAll('[data-lazy]').forEach(el=>mediaIO.observe(el));
+}
+async function loadTileMedia(host){
+    const h=fReg.get(host.dataset.lazy);if(!h)return;
+    const el=host.querySelector('img,video');if(!el)return;
+    try{
+        const file=await h.getFile(),u=URL.createObjectURL(file);objURLs.add(u);
+        const target=vidFallback(el,h.name);if(target)target.src=u;
+        const cell=host.querySelector('.date-modified');
+        if(cell&&host.dataset.d&&file.lastModified!==+host.dataset.d){
+            const dt=new Date(file.lastModified);
+            cell.textContent=dt.toLocaleDateString('en-US')+" "+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        }
+    }catch(e){console.warn('Thumbnail failed for',host.dataset.lazy,e)}
+}
+// =================== END PAGINATION + LAZY MEDIA ===================
+
 function rend(){
     clearURLs();
-    const c=document.getElementById('grid');c.innerHTML='';c.className=vMode==='stats'?'stats-view':(vMode==='grid'?'grid':'list-view');document.getElementById('fCount').innerText=`${cFiles.length} items`;
+    const c=document.getElementById('grid');c.innerHTML='';c.className=vMode==='stats'?'stats-view':(vMode==='dups'?'dup-view':(vMode==='grid'?'grid':'list-view'));document.getElementById('fCount').innerText=`${cFiles.length} items`;
+    if(mediaIO){mediaIO.disconnect();mediaIO=null}
+    clampPage();renderPager();
     if(vMode==='stats'){renderStats(c);return}
+    if(vMode==='dups'){renderDuplicates(c);return}
     
     const getDragData = (path) => {
         if(selectedItems.has(path) && selectedItems.size > 1) {
@@ -602,13 +1141,16 @@ function rend(){
     };
 
     if(vMode==='grid'){
-        cFiles.forEach((f,i)=>{
+        // j is the position on this page; i is the absolute index into cFiles, which is what every
+        // handler below needs - selection, shift-ranges and enterDet() all address cFiles directly.
+        pageItems().forEach((f,j)=>{
+            const i=pageStart()+j;
             const div=document.createElement('div');div.className='card';div.draggable=true;
             if(selectedItems.has(f.p)) div.classList.add('selected');
             div.ondragstart=e=>{e.dataTransfer.setData("text", getDragData(f.p));e.dataTransfer.effectAllowed="move"};
             const isFavorite=favorites.has(f.p);const tag=cache.get(f.p)?.v?'video':'img';
+            div.dataset.lazy=f.p;
             div.innerHTML=`<${tag} src=""></${tag}>${isFavorite?'<div class="favorite-star" style="opacity:1">⭐</div>':''}`;
-            f.h.getFile().then(x=>{const u=URL.createObjectURL(x);objURLs.add(u);div.querySelector(tag).src=u});
             div.onclick=(e)=>{
                 if(e.ctrlKey) {
                     selectedItems.has(f.p) ? selectedItems.delete(f.p) : selectedItems.add(f.p); 
@@ -617,7 +1159,7 @@ function rend(){
                     if(selectedIndex < 0) selectedIndex = i; // Establish first anchor if missing
                     const start=Math.min(selectedIndex,i); const end=Math.max(selectedIndex,i);
                     selectedItems.clear();
-                    for(let j=start; j<=end; j++) selectedItems.add(cFiles[j].p);
+                    for(let k=start; k<=end; k++) selectedItems.add(cFiles[k].p);
                     rend();
                 } else {
                     selectedIndex=i;
@@ -631,6 +1173,7 @@ function rend(){
             div.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,div,f.p,true)};
             c.appendChild(div)
         });
+        observeMedia(c);
         return;
     }
     const h=document.createElement('div');h.className='list-head';
@@ -640,7 +1183,8 @@ function rend(){
         <div class="sortable ${sortBy==='created'?'sorted':''}" onclick="sortByColumn('created')">Date Created ${getSortArrow('created')}</div>
         <div class="sortable ${sortBy==='modified'?'sorted':''}" onclick="sortByColumn('modified')">Date Modified ${getSortArrow('modified')}</div>`;
     c.appendChild(h);
-    cFiles.forEach((f,i)=>{
+    pageItems().forEach((f,j)=>{
+        const i=pageStart()+j;   // absolute index into cFiles - see the note in the grid branch
         const mt=cache.get(f.p)||{},mm=(mt.m&&mt.m.meta)?mt.m.meta:{},div=document.createElement('div');
         div.draggable=true;
         div.ondragstart=e=>{e.dataTransfer.setData("text", getDragData(f.p));e.dataTransfer.effectAllowed="move"};
@@ -657,17 +1201,8 @@ function rend(){
         div.className=`list-row${isSelected?' selected':''}`;
         if(isSelected) div.style.backgroundColor='rgba(139,92,246,0.2)';
         const tag=mt.v?'video':'img';
+        div.dataset.lazy=f.p;if(f.d)div.dataset.d=f.d;   // loadTileMedia() also refreshes .date-modified
         div.innerHTML=`<${tag} class="list-img"></${tag}><div>${f.h.name}</div><div>${mm.model||""}</div><div class="date-created">${dateCreated}</div><div class="date-modified">${dateModified}</div>`;
-        f.h.getFile().then(x=>{
-            const u=URL.createObjectURL(x);
-            objURLs.add(u);
-            div.querySelector(tag).src=u;
-            // Update the modified date cell with live data if it differs from cache
-            if(x.lastModified !== f.d) {
-                const modCell = div.querySelector('.date-modified');
-                if(modCell) modCell.textContent = formatDate(x.lastModified);
-            }
-        });
         div.onclick=(e)=>{
             if(e.ctrlKey){
                 selectedItems.has(f.p)?selectedItems.delete(f.p):selectedItems.add(f.p);
@@ -676,7 +1211,7 @@ function rend(){
                 if(selectedIndex < 0) selectedIndex = i; // Establish first anchor if missing
                 const start=Math.min(selectedIndex,i);const end=Math.max(selectedIndex,i);
                 selectedItems.clear();
-                for(let j=start;j<=end;j++)selectedItems.add(cFiles[j].p);rend()
+                for(let k=start;k<=end;k++)selectedItems.add(cFiles[k].p);rend()
             }else{
                 selectedIndex=i;
                 if(selectedItems.has(f.p) && selectedItems.size > 1) {
@@ -686,7 +1221,8 @@ function rend(){
                 }
             }
         };div.oncontextmenu=(e)=>{e.preventDefault();showContextMenu(e,div,f.p,true)};c.appendChild(div)
-    })
+    });
+    observeMedia(c);
 }
 
 // MOVE ENGINE
@@ -737,6 +1273,9 @@ async function enterDet(i){
     upDet();
 }
 function exitDetail(){
+    // Arrow keys in the detail view walk all of cFiles, so the viewer may have left the page the
+    // grid is showing. Follow it back, otherwise the user returns to a page without their image.
+    if(aIdx>=0&&ensurePageFor(aIdx)){selectedIndex=aIdx;rend()}
     document.body.classList.remove('mode-detail');
     document.body.classList.add('mode-list');
     document.getElementById('detailView').classList.remove('active');
@@ -750,7 +1289,8 @@ async function upDet(){
     const con=document.getElementById('mediaCon');con.innerHTML='';
     const fl=await f.h.getFile(),u=URL.createObjectURL(fl),el=document.createElement(mt.v?'video':'img');
     objURLs.add(u);
-    el.src=u;el.className='detail-media';if(mt.v){el.controls=true;el.autoplay=true}con.appendChild(el);
+    el.className='detail-media';if(mt.v){el.controls=true;el.autoplay=true}con.appendChild(el);
+    vidFallback(el,f.h.name);el.src=u;
     const starBtn=document.getElementById('detailFavoriteStar');
     if(starBtn){
         const isFavorite=favorites.has(f.p);
@@ -774,7 +1314,8 @@ function pop(f,mt){
     document.getElementById('mFile').innerText=f.h.name;
     const m=(mt.m&&mt.m.meta)?mt.m.meta:(mt.m||{}),r=mt.m||{};
     const set=(i,v)=>document.getElementById(i).value=v||"";
-    set('mModel',m.model);set('mSize',m.size);set('mSamp',m.sampler);set('mSeed',m.seed);set('mSteps',m.steps);set('mCfg',m.cfg);set('mPos',r.pos);set('mNeg',r.neg);
+    // Prefer the file's real pixel dimensions; fall back to whatever the workflow claimed.
+    set('mModel',m.model);set('mSize',mt.dim||m.size);set('mSamp',m.sampler);set('mSeed',m.seed);set('mSteps',m.steps);set('mCfg',m.cfg);set('mPos',r.pos);set('mNeg',r.neg);
     
     // LoRA Manager & "Un-Baking" Logic
     // 1. Parse LoRAs existing in the text prompt
@@ -810,6 +1351,13 @@ function pop(f,mt){
 }
 function nav(d){const n=aIdx+d;if(n>=0&&n<cFiles.length){aIdx=n;upDet()}}
 document.addEventListener('keydown',e=>{
+    // Checked before the input guard below: the JSON dialog's search box is an <input>, so Escape
+    // would otherwise only blur it and leave the dialog open.
+    const jo=document.getElementById('jsonOverlay');
+    if(jo&&!jo.classList.contains('hidden')){
+        if(e.key==='Escape'){e.preventDefault();closeJsonDialog()}
+        return;
+    }
     if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'){if(e.key==='Escape'){e.target.blur();hideHelp()}return}
     if(document.body.classList.contains('mode-detail')){if(e.key==='ArrowRight')nav(1);if(e.key==='ArrowLeft')nav(-1);if(e.key==='Escape')exitDetail();return}
     if(e.key==='?'||(e.shiftKey&&e.key==='?')){e.preventDefault();showHelp();return}
@@ -822,26 +1370,221 @@ document.addEventListener('keydown',e=>{
     if(e.key==='f'||e.key==='F'){if(!e.ctrlKey){e.preventDefault();document.getElementById('sIn').focus();return}}
     if(e.key==='r'||e.key==='R'){if(!e.ctrlKey){e.preventDefault();fullScan();return}}
     if(e.key==='t'||e.key==='T'){if(!e.ctrlKey){e.preventDefault();toggleTheme();return}}
+    if(e.key==='d'||e.key==='D'){if(!e.ctrlKey){e.preventDefault();findDuplicates();return}}
     if(e.key==='3'){e.preventDefault();setView('stats');return}
     if(e.key==='s'||e.key==='S'){if(!e.ctrlKey){e.preventDefault();setView('stats');return}}
-    if(vMode==='list'&&cFiles.length>0){if(e.key==='ArrowDown'){e.preventDefault();selectedIndex=Math.min(selectedIndex+1,cFiles.length-1);rend();scrollToSelected();return}
-    if(e.key==='ArrowUp'){e.preventDefault();selectedIndex=Math.max(selectedIndex-1,0);rend();scrollToSelected();return}
-    if(e.key==='Home'){e.preventDefault();selectedIndex=0;rend();scrollToSelected();return}
-    if(e.key==='End'){e.preventDefault();selectedIndex=cFiles.length-1;rend();scrollToSelected();return}}
+    if((vMode==='grid'||vMode==='list')&&pageSize>0){
+        if(e.key==='['){e.preventDefault();gotoPage(curPage-1);return}
+        if(e.key===']'){e.preventDefault();gotoPage(curPage+1);return}
+    }
+    // Arrow keys walk cFiles, so they may cross a page edge - flip the page to follow the selection.
+    if(vMode==='list'&&cFiles.length>0){
+    const move=idx=>{selectedIndex=idx;ensurePageFor(selectedIndex);rend();scrollToSelected()};
+    if(e.key==='ArrowDown'){e.preventDefault();move(Math.min(selectedIndex+1,cFiles.length-1));return}
+    if(e.key==='ArrowUp'){e.preventDefault();move(Math.max(selectedIndex-1,0));return}
+    if(e.key==='Home'){e.preventDefault();move(0);return}
+    if(e.key==='End'){e.preventDefault();move(cFiles.length-1);return}}
 })
-function scrollToSelected(){if(selectedIndex>=0){const cards=document.querySelectorAll('.card, .list-row');if(cards[selectedIndex]){cards[selectedIndex].scrollIntoView({behavior:'smooth',block:'center'})}}}
+// selectedIndex addresses cFiles, but only the current page exists in the DOM - map it.
+function scrollToSelected(){
+    if(selectedIndex<0)return;
+    const rel=selectedIndex-pageStart();
+    const cards=document.querySelectorAll('.card, .list-row');
+    if(rel>=0&&cards[rel])cards[rel].scrollIntoView({behavior:'smooth',block:'center'});
+}
 
 const crT=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1);crT[n]=c}
 const cr32=b=>{let c=0xffffffff;for(let i=0;i<b.length;i++)c=crT[(c^b[i])&0xff]^(c>>>8);return c^0xffffffff};
+// ===================== JSON / WORKFLOW VIEWER =====================
+// extractText() concatenates every text chunk into one blob and drops the keywords. Here we keep
+// them, so ComfyUI's "prompt" (API form) and "workflow" (UI graph) become separate tabs.
+let jsonChunks=[], jsonActive=0, jsonMatches=[], jsonMatchIdx=-1;
+
+async function readTextChunks(buffer){
+    const out=[],v=new DataView(buffer);
+    try{
+        if(v.getUint32(0)===0x89504E47){
+            let o=8;
+            while(o+8<=v.byteLength){
+                const len=v.getUint32(o),type=String.fromCharCode(...new Uint8Array(buffer,o+4,4));
+                if(o+8+len>v.byteLength)break;
+                const data=new Uint8Array(buffer,o+8,len);
+                if(type==='tEXt'||type==='iTXt'||type==='zTXt'){
+                    let z=0;while(z<data.length&&data[z]!==0)z++;
+                    const kw=new TextDecoder('latin1').decode(data.slice(0,z));
+                    let txt='';
+                    if(type==='tEXt')txt=new TextDecoder('utf-8',{fatal:false}).decode(data.slice(z+1));
+                    else if(type==='zTXt')txt=(await decompressZlib(data.slice(z+2)))||'';
+                    else{   // iTXt: keyword \0 compressedFlag compressionMethod langTag \0 translatedKeyword \0 text
+                        let p=z+1;const cflag=data[p];p+=2;
+                        while(p<data.length&&data[p]!==0)p++;p++;
+                        while(p<data.length&&data[p]!==0)p++;p++;
+                        txt=cflag?((await decompressZlib(data.slice(p)))||''):new TextDecoder('utf-8',{fatal:false}).decode(data.slice(p));
+                    }
+                    if(txt&&txt.trim())out.push({keyword:kw||type,text:txt.replace(/\0/g,'')});
+                }
+                o+=len+12;if(type==='IEND')break;
+            }
+        }
+        if(!out.length){   // JPEG/WebP: no keyed chunks, fall back to the flat extractor
+            const t=await extractText(buffer);
+            if(t&&t.trim())out.push({keyword:'metadata',text:t});
+        }
+    }catch(e){console.warn('Text chunk read failed:',e)}
+    out.forEach(c=>{try{c.json=JSON.parse(c.text)}catch(e){c.json=null}});
+    return out;
+}
+
+async function viewJSON(){
+    if(!cItem){showToast('Open an image first.','info');return}
+    if((cache.get(cItem.p)||{}).v||RX_VIDEO.test(cItem.h.name)){showToast('Videos carry no embedded workflow.','info');return}
+    try{
+        const chunks=await readTextChunks(await (await cItem.h.getFile()).arrayBuffer());
+        if(!chunks.length){showToast('No embedded metadata in this file.','info');return}
+        jsonChunks=chunks;
+        const firstJson=chunks.findIndex(c=>c.json);
+        jsonActive=firstJson>=0?firstJson:0;
+        document.getElementById('jsonOverlay').classList.remove('hidden');
+        renderJsonDialog();
+        document.getElementById('jsonSearch').focus();
+    }catch(e){console.error(e);showToast('Could not read this file.','error')}
+}
+function closeJsonDialog(){document.getElementById('jsonOverlay').classList.add('hidden');jsonMatches=[];jsonMatchIdx=-1}
+function switchJsonTab(i){jsonActive=i;renderJsonDialog()}
+
+function hlJson(line){
+    let e=esc(line);
+    e=e.replace(/&quot;(.*?)&quot;(\s*:)/g,'<span class="jk">&quot;$1&quot;</span>$2');
+    e=e.replace(/([:[,]\s*)&quot;(.*?)&quot;/g,'$1<span class="js-str">&quot;$2&quot;</span>');
+    e=e.replace(/([:[,]\s*)(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=[,\]}\s]|$)/g,'$1<span class="jnum">$2</span>');
+    e=e.replace(/([:[,]\s*)(true|false|null)\b/g,'$1<span class="jbool">$2</span>');
+    return e;
+}
+
+function renderJsonDialog(){
+    const c=jsonChunks[jsonActive];if(!c)return;
+    document.getElementById('jsonTitle').textContent=cItem?cItem.h.name:'';
+    document.getElementById('jsonTabs').innerHTML=jsonChunks.map((ch,i)=>
+        `<button class="json-tab${i===jsonActive?' active':''}" onclick="switchJsonTab(${i})">${esc(ch.keyword)}${ch.json?'':' · text'}</button>`).join('');
+    c.pretty=c.json?JSON.stringify(c.json,null,2):c.text;
+    const lines=c.pretty.split('\n');
+    const code=document.getElementById('jsonCode');
+    // Very large payloads skip per-line highlighting so the dialog stays responsive.
+    if(lines.length>40000)code.textContent=c.pretty;
+    else code.innerHTML=lines.map((l,i)=>`<div class="jl" id="jl-${i}">${hlJson(l)}</div>`).join('');
+    renderJsonOutline(c,lines);
+    const s=document.getElementById('jsonSearch');s.value='';
+    jsonMatches=[];jsonMatchIdx=-1;
+    document.getElementById('jsonCount').textContent=`${lines.length.toLocaleString()} lines`;
+}
+
+function renderJsonOutline(c,lines){
+    const el=document.getElementById('jsonOutline'),j=c.json,nodes=[];
+    if(j&&typeof j==='object'){
+        const keyLine=new Map(),idLine=new Map();
+        lines.forEach((l,i)=>{
+            const k=l.match(/^\s*"([^"]+)"\s*:\s*\{/);if(k&&!keyLine.has(k[1]))keyLine.set(k[1],i);
+            const d=l.match(/^\s*"id"\s*:\s*(\d+)/);if(d&&!idLine.has(d[1]))idLine.set(d[1],i);
+        });
+        if(Array.isArray(j.nodes)){          // UI "workflow" graph format
+            j.nodes.forEach(n=>nodes.push({id:String(n.id),type:n.type||'?',
+                title:n.title||(n._meta&&n._meta.title)||'',line:idLine.get(String(n.id))||0}));
+        }else{                               // API "prompt" format: keys are node ids
+            for(const [id,n] of Object.entries(j)){
+                if(!n||typeof n!=='object'||Array.isArray(n))continue;
+                if(!n.class_type&&!n.inputs)continue;
+                nodes.push({id,type:n.class_type||'?',title:(n._meta&&n._meta.title)||'',line:keyLine.get(id)||0});
+            }
+        }
+    }
+    nodes.sort((a,b)=>a.line-b.line);
+    el.innerHTML=nodes.length
+        ? `<div class="json-empty" style="padding:6px 12px 8px">${nodes.length} nodes</div>`+nodes.map(n=>
+            `<div class="json-node" onclick="jumpToLine(${n.line})" title="${esc(n.title||n.type)}">
+                <span class="jn-id">${esc(n.id)}</span><span class="jn-type">${esc(n.type)}</span>
+                ${n.title&&n.title!==n.type?`<span class="jn-title">${esc(n.title)}</span>`:''}
+             </div>`).join('')
+        : `<div class="json-empty">No node graph in this chunk.<br><br>This is ${c.json?'JSON without a recognised ComfyUI structure':'plain text (likely A1111 parameters)'}.</div>`;
+}
+
+function jumpToLine(i){
+    const el=document.getElementById('jl-'+i);if(!el)return;
+    el.scrollIntoView({block:'center',behavior:'smooth'});
+    el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1000);
+}
+
+function jsonSearch(term){
+    const code=document.getElementById('jsonCode');
+    code.querySelectorAll('mark.jm').forEach(m=>m.parentNode.replaceChild(document.createTextNode(m.textContent),m));
+    code.normalize();
+    jsonMatches=[];jsonMatchIdx=-1;
+    const t=(term||'').trim(),count=document.getElementById('jsonCount');
+    if(!t){count.textContent=`${code.children.length.toLocaleString()} lines`;return}
+    const low=t.toLowerCase(),walker=document.createTreeWalker(code,NodeFilter.SHOW_TEXT),hits=[];
+    let node;
+    while((node=walker.nextNode())){
+        const s=node.nodeValue.toLowerCase();
+        let idx=s.indexOf(low);
+        while(idx!==-1){hits.push({node,idx});idx=s.indexOf(low,idx+low.length)}
+    }
+    // Wrap back-to-front: surroundContents splits the text node, and processing in reverse keeps
+    // the earlier (smaller) offsets valid inside the retained leading fragment.
+    for(let i=hits.length-1;i>=0;i--){
+        const r=document.createRange();
+        try{
+            r.setStart(hits[i].node,hits[i].idx);r.setEnd(hits[i].node,hits[i].idx+t.length);
+            const mk=document.createElement('mark');mk.className='jm';
+            r.surroundContents(mk);jsonMatches.unshift(mk);
+        }catch(e){}
+    }
+    if(!jsonMatches.length){count.textContent='no matches';return}
+    jsonGoto(0);
+}
+function jsonGoto(i){
+    if(!jsonMatches.length)return;
+    const prev=jsonMatches[jsonMatchIdx];if(prev)prev.classList.remove('cur');
+    jsonMatchIdx=(i+jsonMatches.length)%jsonMatches.length;
+    const m=jsonMatches[jsonMatchIdx];m.classList.add('cur');
+    m.scrollIntoView({block:'center',behavior:'smooth'});
+    document.getElementById('jsonCount').textContent=`${jsonMatchIdx+1} / ${jsonMatches.length}`;
+}
+function jsonStep(d){jsonGoto(jsonMatchIdx+d)}
+
+async function copyJson(){
+    const c=jsonChunks[jsonActive];if(!c)return;
+    try{await navigator.clipboard.writeText(c.pretty);showToast('Copied to clipboard','success')}
+    catch(e){showToast('Clipboard blocked by the browser','error')}
+}
+function downloadJson(){
+    const c=jsonChunks[jsonActive];if(!c)return;
+    const base=(cItem?cItem.h.name:'metadata').replace(/\.[^.]+$/,'');
+    const u=URL.createObjectURL(new Blob([c.pretty],{type:c.json?'application/json':'text/plain'}));
+    const a=document.createElement('a');a.href=u;a.download=`${base}.${c.keyword}.${c.json?'json':'txt'}`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+// =================== END JSON / WORKFLOW VIEWER ===================
+
 async function fixSave(){
     if(!cItem)return;
+    // Videos have no PNG chunks to rewrite, and the non-PNG branch below would hand a video blob to
+    // an <img>, which fires onerror and never onload - the old code awaited that forever.
+    if((cache.get(cItem.p)||{}).v||RX_VIDEO.test(cItem.h.name)){
+        showToast("Metadata editing works on images only, not video.","error");return;
+    }
     const pos=document.getElementById('mPos').value.replace(/\n/g," "),neg=document.getElementById('mNeg').value.replace(/\n/g," ");
     const txt=`${pos}\nNegative prompt: ${neg}\nSteps: ${document.getElementById('mSteps').value}, Sampler: ${document.getElementById('mSamp').value}, CFG scale: ${document.getElementById('mCfg').value}, Seed: ${document.getElementById('mSeed').value}, Size: ${document.getElementById('mSize').value}, Model: ${document.getElementById('mModel').value}`;
     try{
         const f=await cItem.h.getFile();let b=await f.arrayBuffer(),v=new DataView(b.slice(0,8));
         const isPng = v.getUint32(0)===0x89504E47 && v.getUint32(4)===0x0D0A1A0A;
         if(!isPng){
-            const i=new Image();i.src=URL.createObjectURL(f);await new Promise(r=>i.onload=r);
+            // readDims doubles as a decodable-image check: no recognised header, no conversion.
+            if(!readDims(b)){showToast("Not a readable image — nothing was written.","error");return}
+            if(isAnimated(b)&&!confirm("This file is animated.\n\nSaving flattens it to a single-frame PNG and deletes the original. Continue?"))return;
+            const i=new Image(),u=URL.createObjectURL(f);objURLs.add(u);i.src=u;
+            // Must settle on failure too - a decode error used to hang this await indefinitely.
+            const ok=await new Promise(r=>{i.onload=()=>r(true);i.onerror=()=>r(false);setTimeout(()=>r(false),20000)});
+            if(!ok||!i.width||!i.height){showToast("Could not decode this image — nothing was written.","error");return}
             const c=document.createElement('canvas');c.width=i.width;c.height=i.height;
             c.getContext('2d').drawImage(i,0,0);
             b=await new Promise(r=>c.toBlob(z=>z.arrayBuffer().then(r),'image/png'))
@@ -969,6 +1712,7 @@ document.getElementById('sIn').addEventListener('input',async e=>{
         if(matches){a.push({p,h:fh,d:v.d||0,n:v.n||fh.name})}
     }
     cFiles=a;
+    curPage=0;selectedIndex=-1;
     await applySort();
     rend();
 });

@@ -1,10 +1,10 @@
-# History Guru 🧘‍♂️ v4.2.1 (The Alignment Fix)
+# History Guru 🧘‍♂️ v4.3.0 (ChromeEdge Edition)
 
 > **The 100% Offline, Single-File File Manager & Metadata Viewer for AI Images.**
 
 **History Guru** has evolved into a precision instrument for AI creators. It is no longer just a viewer—it is a full-fledged **Local File Manager** and **Metadata Editor** for your ComfyUI and A1111 output folders. 
 
-Organize, sort, move, rename, and "un-bake" your AI generations without ever leaving the metadata view. It runs entirely in your browser using the modern *File System Access API* (Chrome/Edge) or high-performance HTML5 inputs (Firefox).
+Organize, sort, move, rename, and "un-bake" your AI generations without ever leaving the metadata view. It runs entirely in your browser using the modern *File System Access API*. This fork targets **Chrome / Edge only** — the Firefox edition has been retired in favor of focusing on the full file-management feature set that only the File System Access API can provide.
 
 ---
 
@@ -31,26 +31,35 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 ### 🌗 Daylight & Night Modes
 *   **Universal Parity:** Reworked Light Mode with theme-aware CSS variables. Overlays, labels, and selection highlights are high-contrast and perfectly legible in bright environments.
 
+### 🔍 Content-Based Duplicate Detection
+*   **Three-Stage Pipeline:** Escalates from free size-bucketing, to a partial 64KB hash, to a full SHA-256 — so libraries with thousands of images stay fast; only true collisions ever get fully hashed.
+*   **N-Way Grouping:** Finds every copy of a file, not just pairs, across all subfolders, independent of filename.
+*   **Guided Cleanup:** Review groups sorted by reclaimable space, with thumbnails, `Keep oldest / newest / shortest path` auto-selection, and two confirmations before anything is deleted.
+
+### 📄 JSON / Workflow Viewer
+*   **Full Metadata Inspector:** View a file's raw embedded ComfyUI `prompt`/`workflow` chunks or A1111 `parameters` text, with syntax highlighting.
+*   **Clickable Node Outline:** Jump straight to any node by id, type, or title.
+*   **Search & Export:** In-place search with match stepping, plus copy-to-clipboard or save-to-disk.
+
+### ⚡ Pagination & Lazy Loading
+*   **Scales to 10,000+ Images:** Page-based rendering (100/200/500/1000/All) keeps the DOM light, while thumbnails only decode once they scroll into view.
+*   **Measured Performance:** 10,000 items render in ~60ms with only the visible thumbnails ever opened.
+
+### 🎬 Expanded Format Support
+*   Added **GIF**, **MOV**, and **MKV** alongside PNG/JPEG/WebP and MP4/WebM. Unplayable video containers fall back to a labelled placeholder tile instead of a blank thumbnail.
+*   **Safer "Fix & Save":** Animated GIF/WebP now prompt before flattening to a single frame, and non-image files are rejected before anything is written.
+
 ---
 
 ## 🚀 How to Use
 
-### 🟢 Chrome / Edge / Opera (Recommended)
+### 🟢 Chrome / Edge / Opera
 *Best for: Managing files, bulk organizing, and direct disk editing.*
 
 1.  **Open** `Guru Manager ChromeEdge Edition.html` in your browser.
 2.  **Grant Permission:** Click **"Open Folder"** and select your directory. When the browser asks, click **"Edit"** or **"Allow"** to enable file management features.
 3.  **Organize:** Use the sidebar to create folders. Use `Shift+Click` to select groups and drag them into new locations.
 4.  **Edit:** Click any image to open the Inspector. Edit prompts or LoRAs and hit **"Fix & Save"** to overwrite the file on disk.
-
-### 🟠 Firefox Edition
-*Best for: Fast metadata inspection and image conversion.*
-
-1.  **Open** `Guru Manager Firefox Edition.html` in Firefox.
-2.  **Load:** Click **"Load Folder"** and select your directory.
-3.  **Export:** Edit metadata as needed. Hit **"Fix & Save"**. 
-    *   *Tip:* Enable **"Always ask where to save files"** in Firefox Settings to use the download button as a "Save As" feature.
-4.  **Parity:** Enjoy the same LoRA manager and metadata tools as the Chrome edition in a lightweight, read-only environment.
 
 ---
 
@@ -62,14 +71,17 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   `R` - Refresh folder
 *   `?` or `/` - Show help & shortcuts
 *   `S` - Toggle Statistics view
+*   `D` - Find duplicates
+*   `[` / `]` - Page back / forward
 
 ---
 
 ## 🔧 Technical Architecture
 *   **File System Access API:** Direct disk I/O for file moves and renames.
 *   **IndexedDB Caching:** Instant subsequent loads for thousands of images.
-*   **Virtual Scrolling:** Near-zero lag when browsing massive collections.
+*   **Virtual Scrolling & Pagination:** Near-zero lag when browsing massive collections, with lazy-loaded thumbnails.
 *   **CRC32 Binary Injection:** Patches PNG chunks without re-encoding pixel data.
+*   **Staged SHA-256 Hashing:** Size bucket → partial hash → full hash, so duplicate scans stay cheap at scale.
 
 ---
 
@@ -79,6 +91,15 @@ MIT License - Free to use, modify, and distribute for the AI art community.
 ---
 
 ## 🚀 Version History
+
+### [4.3.0] - 2026-07-26 (ChromeEdge-only fork)
+- **Duplicate Detection Rebuilt**: Replaced the old pairs-only 50KB hash with a 3-stage (size → partial hash → full SHA-256) scanner that finds true n-way groups, plus a full review UI with keep/delete selection and auto-select modes.
+- **Pagination & Lazy Thumbnails**: Added a page-size selector and IntersectionObserver-based lazy loading so libraries of 10,000+ images render in milliseconds instead of wedging the browser.
+- **JSON / Workflow Viewer**: New dialog for inspecting a file's raw ComfyUI `prompt`/`workflow` chunks or A1111 `parameters`, with syntax highlighting, a clickable node outline, and in-place search.
+- **More Formats**: Added `gif`, `mov`, `mkv` support; undecodable video containers now show a labelled fallback tile instead of a blank thumbnail.
+- **Fix & Save Safety Guards**: Videos and unrecognised files are rejected before any write; animated GIF/WebP now prompt before flattening to a single frame.
+- **Fixed**: Empty file list on first open (library in subfolders rendered nothing), wrong image resolution display (now read from the file header, not workflow-claimed latent size), and "Fix & Save" silently hanging on video files.
+- **Removed**: Firefox Edition — this fork is Chrome/Edge only going forward.
 
 ### [4.2.1] - 2025-12-24
 - **US Date Format**: Switched to `MM/DD/YYYY` localization.
