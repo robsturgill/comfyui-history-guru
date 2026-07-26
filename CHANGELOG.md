@@ -2,6 +2,26 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [4.4.0] - 2026-07-26
+
+### Added
+- **🔎 Advanced Search (Boolean Query Language)**: The search box now parses a real query language instead of doing one flat substring match across everything. Bare words are ANDed together; `AND` / `OR` / `NOT` operators, `-word` exclusion, `"quoted phrases"`, and `( )` grouping all work, and `field:value` restricts a term to a single field. Valid fields are `name` `path` `prompt` `neg` `model` `sampler` `seed` `steps` `cfg` `size` `lora`, plus friendlier aliases (`file`, `folder`, `positive`, `negative`, `checkpoint`, `ckpt`, `resolution`, `resource`). So `(man OR woman) AND fish -river model:flux` does what it looks like it does. Input that can't be parsed degrades gracefully instead of throwing.
+- **⚙ Advanced Search Builder**: A gear button inside the search box opens a builder panel with three fields — *All of these* / *Any of these* / *None of these* — plus a "Search in" field selector. It composes the query syntax for you, shows a live preview of the generated query, and writes it into the search box, so it teaches the operators rather than hiding them behind a form. The search box also gained an ✕ clear button.
+- **🏷️ Model Filter Dropdown**: A toolbar dropdown listing every distinct checkpoint found in the library with a per-model file count, plus a `— No model` bucket for files where no checkpoint was detected. It composes with the text search and the favorites filter rather than replacing them. Deliberately a toolbar control instead of a select embedded in the "Model" column header: the header stays a plain sort target, and the filter still works in Grid view where there is no header at all.
+- **↕️ Sort Controls Moved to the Toolbar**: Sort now sits next to the model filter, pagination and thumbnail size, with a dedicated ascending/descending toggle button, and gained **Model** as a sort key. The toolbar dropdown and the clickable list-view column headers are two views of the same state — changing either updates the other.
+- **🎚️ Themed Scrollbars**: The folder tree, main view, inspector and JSON viewer now use styled scrollbars driven by new `--sb-track` / `--sb-thumb` / `--sb-thumb-hov` variables, defined for both the dark and light themes so neither mode gets a stock scrollbar bolted onto a custom panel.
+- **📖 Search Syntax Reference in Help**: The `?` overlay now documents every operator and searchable field with worked examples.
+
+### Fixed
+- **Sticky toolbars were transparent for their top 20px**: `.grid-scroll` carried `padding:20px`, and that padding insets the containing block a `position:sticky` child is constrained to — so the list-view column header and the duplicates action bar both parked 20px *below* the top of the scroll area, with images scrolling visibly through the gap above them. The gutter moved off the scroller and onto the inner views (`.grid`, `.list-view`), so both bars pin flush to the top. They also picked up a backdrop blur and a drop shadow so they read as overlays. This removed the `.dup-view{margin:-20px}` hack that existed only to cancel that padding.
+- **List header columns didn't line up with their rows**: `.list-head` hard-coded a `55px` first column while `.list-row` uses `calc(var(--thumb-size) / 2.5 + 18px)` — 107.6px at the default thumbnail size — so every downstream label (Name, Model, Date Created, Date Modified) sat left of the data it was supposed to title. The header now uses the same track sizes as the rows.
+- **Extra padding in the search box**: The input reserved `36px` of left padding for a search icon that was never in the markup. Tightened up, and the box now has a minimum width so it stops collapsing to nothing when the header gets cramped.
+- **Favorites filter is now respected by search**: ⭐-only mode applied while browsing a folder but was silently dropped the moment you typed anything in the search box.
+- **Search input is debounced (160ms)** instead of rescanning the entire cache on every keystroke.
+
+### Known / unchanged
+- **Video metadata is still not extracted**: videos short-circuit metadata parsing entirely and report only a placeholder model of `Video` plus their file size — no prompts, no workflow, no true resolution. Findings and an implementation proposal live in `docs/VIDEO-METADATA.md` (local-only; `docs/` is gitignored). Sample ComfyUI video files are needed before this can be built and verified.
+
 ## [4.3.0] - 2026-07-26
 
 ### Added

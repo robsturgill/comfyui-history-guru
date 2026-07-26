@@ -31,6 +31,13 @@ db = {transaction:()=>({objectStore:()=>({put(){},delete(){}}), set oncomplete(f
 fReg.set('folder1/a.png', {name:'a.png', getFile:async()=>new File([bytes],'a.png')});
 ```
 
+For UI work you don't need real files at all: generate the bytes with `canvas.toBlob()`, so the whole
+library is synthetic and no picker is involved. Seed `fReg` + `cache` (+ `dupGroups` for the
+duplicates view), then `rTree(); buildModelFilter(); syncSortUI(); await opD(null,'')` and hide
+`#wel`. That is enough to exercise list/grid/dups rendering, sticky headers, sorting, filtering and
+the search parser end-to-end. Note `dReg` needs `''` mapped to a root stub, and each folder handle
+needs a `removeEntry` if you touch delete paths.
+
 `samples/` is deliberately arranged to cover every duplicate case:
 
 | Content | Files | Case exercised |
@@ -77,6 +84,18 @@ syntax highlighter has already inserted tags. Matches are wrapped **back-to-fron
 The `Escape` handler for this dialog sits **before** the input guard in the global `keydown`
 listener — the search box is an `<input>`, so otherwise Escape would only blur it.
 
+### Sticky bars and the scroll gutter
+
+`.grid-scroll` has **no padding** — the 20px gutter lives on `.grid` and `.list-view` instead. This
+is load-bearing: padding on the scroller insets the containing block that a `position:sticky` child
+is constrained to, which parked `.list-head` and `.dup-bar` 20px below the top of the scroll area
+and let rows scroll through the transparent strip above them. If you put padding back on
+`.grid-scroll`, both sticky bars break the same way.
+
+`.list-head` must keep the **same `grid-template-columns` as `.list-row`** (first track is
+`calc(var(--thumb-size) / 2.5 + 18px)`, not a fixed px value) or the labels drift off their data as
+the thumbnail slider moves.
+
 ### Pagination and lazy media
 
 `rend()` renders `pageItems()`, not `cFiles`. Two separate caps, and both are needed:
@@ -109,7 +128,9 @@ listed but never classified (or classified but never listed).
 - Video: `mp4` `webm` `mov` `mkv`
 
 Videos skip metadata parsing entirely — `proc()` sets `model:"Video"` and puts the **file size in MB**
-into `meta.size`, and `dim` stays null. Chrome cannot decode every container (`.mkv` in particular),
+into `meta.size`, and `dim` stays null. So prompts, workflow and true resolution never appear for
+video; this is a gap, not a bug in the parser. `docs/VIDEO-METADATA.md` has the research and an
+implementation proposal (`docs/` is gitignored, so that file is local-only). Chrome cannot decode every container (`.mkv` in particular),
 so `vidFallback()` swaps an errored `<video>` for a labelled 🎬 tile rather than leaving it blank.
 It must be attached **after** the element is in the DOM — it replaces the node via `parentNode`.
 
@@ -172,6 +193,10 @@ Line numbers drift with edits — grep the marker comments (`// STATE`, `// DB`,
 CSS variables on `:root` and `[data-theme="light"]`. **Every new color must come from a var** or it
 breaks light mode. Duplicates-view styles start at `.dup-view` (line ~83).
 
+Note `data-theme` sits on **`<body>`, not `<html>`** — so `[data-theme="light"] .foo` works, but a
+var read off `document.documentElement` always returns the dark value. Scrollbars are themed through
+`--sb-track` / `--sb-thumb` / `--sb-thumb-hov` plus the `::-webkit-scrollbar-*` pseudos.
+
 ### Markup — lines 118–214
 Header buttons (each wired with an inline `onclick`), sidebar tree, `#grid` (the single container
 that all four view modes render into), detail layer, inspector, overlays, help.
@@ -208,9 +233,33 @@ Single global `keydown` listener with early returns. Input/textarea targets bail
 detail-mode keys, then global shortcuts. Bound: `?` `Esc` `Enter` `Delete` `F` `R` `T` `D` `S` `3`
 and arrows/Home/End in list mode.
 
-### Search — line 1237
-Input handler that scans all of `cache` (filename, prompts, model, sampler, seed, steps, cfg, size,
-resources) and replaces `cFiles` wholesale.
+### Search — grep `// ===================== ADVANCED SEARCH`
+A boolean query language over `cache`, not a substring scan. `advTokenize` → `advParse` (recursive
+descent, `or > and > unary`) → `advEval` against the field bag built by `searchFields()`. Bare words
+are ANDed, so a single-word query behaves exactly like the old one. `-x` / `!x` / `NOT x` negate,
+`"…"` is a phrase, `( )` group, `field:value` restricts to one field (`FIELD_ALIAS` maps the
+synonyms). A malformed query never throws — `pUn()` skips stray operators and unclosed parens just
+end the group.
+
+`searchFields()` joins every field into `f.all` with a **double space** so a quoted phrase can't
+match across a field boundary. Unknown `field:` names fall back to `f.all`.
+
+`runSearch()` replaces `cFiles` wholesale and is the only search entry point; the input handler
+debounces into it (160ms). The advanced panel (`advCompose`) is a *front-end for the syntax*, not a
+second engine — it composes a query string, writes it into `#sIn`, and calls the same path.
+
+### Filters
+
+Two filters narrow every listing and must be applied in **both** `opD()` and `runSearch()`:
+`showFavoritesOnly` and `modelFilter` (via `passModel`). `refreshList()` re-runs whichever of the two
+listings is currently active — use it after changing a filter rather than calling `opD` directly.
+
+`buildModelFilter()` repopulates the toolbar dropdown from `fReg` and **clears a filter pinned to a
+model that no longer exists**, which would otherwise silently show an empty library. Call it after
+any scan.
+
+`syncSortUI()` keeps the toolbar sort dropdown and the clickable `.list-head` columns showing the
+same state — both drive `sortBy`/`sortDirection`, so whichever the user touches, call it.
 
 ---
 

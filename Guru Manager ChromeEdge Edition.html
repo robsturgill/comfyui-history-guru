@@ -4,14 +4,45 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>History Guru ChromeEdge Edition</title>
 <style>
-    :root{--bg:#09090b;--head:rgba(9,9,11,0.98);--side:#0c0c0e;--card:#18181b;--bd:#27272a;--acc:#8b5cf6;--txt:#e4e4e7;--mut:#a1a1aa;--chip-bg:rgba(139,92,246,0.15);--chip-txt:#c4b5fd;--badge-bg:rgba(0,0,0,0.3);--thumb-size:224px;--sel-bg:rgba(139,92,246,0.25)}
-    [data-theme="light"]{--bg:#f8f9fa;--head:#ffffff;--side:#f1f3f4;--card:#ffffff;--bd:#dadce0;--acc:#7c3aed;--txt:#202124;--mut:#5f6368;--chip-bg:rgba(124,58,237,0.1);--chip-txt:#6d28d9;--badge-bg:rgba(0,0,0,0.05);--sel-bg:rgba(124,58,237,0.15)}
+    :root{--bg:#09090b;--head:rgba(9,9,11,0.98);--side:#0c0c0e;--card:#18181b;--bd:#27272a;--acc:#8b5cf6;--txt:#e4e4e7;--mut:#a1a1aa;--chip-bg:rgba(139,92,246,0.15);--chip-txt:#c4b5fd;--badge-bg:rgba(0,0,0,0.3);--thumb-size:224px;--sel-bg:rgba(139,92,246,0.25);--sb-track:rgba(255,255,255,0.04);--sb-thumb:#3f3f46;--sb-thumb-hov:#5b5b66}
+    [data-theme="light"]{--bg:#f8f9fa;--head:#ffffff;--side:#f1f3f4;--card:#ffffff;--bd:#dadce0;--acc:#7c3aed;--txt:#202124;--mut:#5f6368;--chip-bg:rgba(124,58,237,0.1);--chip-txt:#6d28d9;--badge-bg:rgba(0,0,0,0.05);--sel-bg:rgba(124,58,237,0.15);--sb-track:rgba(0,0,0,0.04);--sb-thumb:#c4c7c5;--sb-thumb-hov:#9aa0a6}
+    /* Themed scrollbars. Firefox gets the two-value shorthand, Chromium the ::-webkit- pseudos. */
+    *{scrollbar-width:thin;scrollbar-color:var(--sb-thumb) var(--sb-track)}
+    ::-webkit-scrollbar{width:11px;height:11px}
+    ::-webkit-scrollbar-track{background:var(--sb-track)}
+    ::-webkit-scrollbar-thumb{background:var(--sb-thumb);border-radius:99px;border:2px solid transparent;background-clip:content-box}
+    ::-webkit-scrollbar-thumb:hover{background:var(--sb-thumb-hov);background-clip:content-box}
+    ::-webkit-scrollbar-corner{background:transparent}
+    .tree::-webkit-scrollbar{width:9px}
+    .tree::-webkit-scrollbar-track{background:transparent}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background-color 0.3s ease,color 0.3s ease}
 header{height:60px;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;background:var(--head);gap:16px;z-index:50}
 h1{font-size:1.1rem;font-weight:800;margin:0;white-space:nowrap}h1 span{color:var(--acc)}
-.s-box{flex:1;max-width:500px;position:relative}.s-in{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:8px 12px 8px 36px;border-radius:8px;outline:none}
-.s-in:focus{border-color:var(--acc)}.btn{background:var(--acc);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem}
-.btn-icon{padding:8px;background:transparent;border:1px solid var(--bd);color:var(--mut);border-radius:6px;cursor:pointer;display:flex;transition:all 0.2s}
+.s-box{flex:1;min-width:210px;max-width:500px;position:relative}
+/* Left padding used to be 36px for a search icon that was never in the markup. */
+.s-in{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);padding:6px 62px 6px 10px;border-radius:8px;outline:none;font-size:0.85rem}
+.s-in:focus{border-color:var(--acc)}
+.s-tools{position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:2px}
+.s-tool{background:transparent;border:none;color:var(--mut);cursor:pointer;padding:3px 5px;border-radius:5px;font-size:0.8rem;line-height:1;display:flex;align-items:center}
+.s-tool:hover{background:var(--bd);color:var(--txt)}
+.s-tool.active{background:var(--acc);color:#fff}
+.s-in.adv-on{border-color:var(--acc)}
+/* ADVANCED SEARCH PANEL */
+.adv-panel{position:absolute;top:calc(100% + 8px);left:0;width:min(560px,92vw);background:var(--side);border:1px solid var(--bd);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,0.45);padding:14px;z-index:4000;display:flex;flex-direction:column;gap:10px}
+[data-theme="light"] .adv-panel{box-shadow:0 12px 32px rgba(0,0,0,0.18)}
+.adv-panel.hidden{display:none}
+.adv-row{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px}
+.adv-row label{font-size:0.7rem;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.3px}
+.adv-row input,.adv-row select{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;padding:6px 9px;font-size:0.82rem;outline:none}
+.adv-row input:focus,.adv-row select:focus{border-color:var(--acc)}
+.adv-hint{font-size:0.68rem;color:var(--mut);line-height:1.5}
+.adv-hint code{background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 4px;font-size:0.95em;color:var(--chip-txt)}
+.adv-preview{font-family:ui-monospace,Consolas,monospace;font-size:0.72rem;color:var(--chip-txt);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:7px 9px;word-break:break-word;min-height:31px}
+.adv-foot{display:flex;gap:8px;align-items:center}
+.adv-foot .spacer{flex:1}
+.adv-err{color:#f87171;font-size:0.72rem;font-weight:600}
+.btn{background:var(--acc);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:0.85rem;white-space:nowrap;flex-shrink:0}
+.btn-icon{padding:8px;background:transparent;border:1px solid var(--bd);color:var(--mut);border-radius:6px;cursor:pointer;display:flex;transition:all 0.2s;flex-shrink:0}
 .btn-icon:hover{background:var(--bd);color:var(--txt);border-color:var(--acc)}
 .btn-icon.active{background:var(--acc);border-color:var(--acc);color:#fff}
 .layout{display:flex;flex:1;overflow:hidden;position:relative}
@@ -21,14 +52,28 @@ h1{font-size:1.1rem;font-weight:800;margin:0;white-space:nowrap}h1 span{color:va
 .folder:hover{background:var(--bd);color:var(--txt)}.folder.active{background:rgba(139,92,246,0.1);color:var(--acc);border-left:3px solid var(--acc)}
 .folder.drag-over{background:rgba(139,92,246,0.2);border-color:var(--acc);color:#fff}
 .stage{flex:1;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
-.toolbar{padding:8px 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-size:0.85rem}
-    .grid-scroll{flex:1;overflow-y:auto;padding:20px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--thumb-size),1fr));gap:16px;padding-bottom:100px}
+.toolbar{padding:8px 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;gap:16px;flex-wrap:wrap}
+.tb-group{display:flex;align-items:center;gap:6px}
+.tb-lbl{color:var(--mut);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.tb-sel{background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;font-size:0.75rem;padding:4px 6px;cursor:pointer;max-width:190px}
+.tb-sel:hover{border-color:var(--acc)}
+.tb-sel.filtered{border-color:var(--acc);color:var(--acc)}
+.tb-dir{background:transparent;border:1px solid var(--bd);color:var(--txt);border-radius:6px;cursor:pointer;width:26px;height:26px;font-size:0.8rem;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.tb-dir:hover{border-color:var(--acc);color:var(--acc)}
+    /* The 20px gutter lives on the inner views, not here: padding on the scroller insets the sticky
+       containing block, which parked .list-head / .dup-bar 20px down and let rows scroll through the
+       transparent strip above them. */
+    .grid-scroll{flex:1;overflow-y:auto;padding:0}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--thumb-size),1fr));gap:16px;padding:20px 20px 100px}
+    .list-view{padding-bottom:100px}
     .thumb-resizer{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:0.75rem;font-weight:600}
     .thumb-slider{cursor:pointer;accent-color:var(--acc);width:80px;height:4px}
     body.no-thumbnails .thumb-resizer, body.no-thumbnails #viewToggle{display:none}
 .card{aspect-ratio:1;background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden;cursor:pointer;position:relative}
 .card:hover{border-color:var(--acc);transform:translateY(-4px)}.card img,.card video{width:100%;height:100%;object-fit:cover;pointer-events:none}
-.list-head{display:grid;grid-template-columns:55px 3fr 2fr 1.5fr 1.5fr;gap:12px;padding:10px 16px;border-bottom:1px solid var(--bd);font-size:0.75rem;color:var(--mut);font-weight:700;position:sticky;top:0;background:var(--bg);z-index:10}
+/* Must track .list-row's columns exactly or the labels drift off their data. */
+.list-head{display:grid;grid-template-columns:calc(var(--thumb-size) / 2.5 + 18px) 3fr 2fr 1.5fr 1.5fr;gap:12px;padding:10px 16px;border-bottom:1px solid var(--bd);font-size:0.75rem;color:var(--mut);font-weight:700;position:sticky;top:0;background:var(--head);backdrop-filter:blur(6px);box-shadow:0 4px 12px rgba(0,0,0,0.28);z-index:10}
+[data-theme="light"] .list-head{box-shadow:0 2px 8px rgba(0,0,0,0.10)}
 .list-head>div{cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px;transition:color 0.2s}
 .list-head>div:hover{color:var(--acc)}
 .list-head>div:first-child{cursor:default}
@@ -80,8 +125,9 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;display:flex;align-items:center;gap:12px;min-width:250px;animation:toastSlide 0.3s ease}.toast.success{border-left:4px solid #4ade80}.toast.error{border-left:4px solid #ef4444}.toast.info{border-left:4px solid var(--acc)}@keyframes toastSlide{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .context-menu{position:fixed;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 0;min-width:150px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none}.context-menu-item{padding:8px 16px;cursor:pointer;color:var(--txt);font-size:0.85rem}.context-menu-item:hover{background:var(--side)}.context-menu-item.disabled{opacity:0.5;cursor:not-allowed}
 /* DUPLICATES VIEW */
-.dup-view{margin:-20px;padding:0}
-.dup-bar{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--bd);padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.dup-view{margin:0;padding:0}
+.dup-bar{position:sticky;top:0;z-index:20;background:var(--head);backdrop-filter:blur(6px);box-shadow:0 4px 12px rgba(0,0,0,0.28);border-bottom:1px solid var(--bd);padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+[data-theme="light"] .dup-bar{box-shadow:0 2px 8px rgba(0,0,0,0.10)}
 .dup-summary{font-size:0.9rem;color:var(--mut)}.dup-summary strong{color:var(--txt)}
 .dup-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
 .dup-btn{background:var(--card);border:1px solid var(--bd);color:var(--txt);padding:7px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;font-weight:600}
@@ -157,7 +203,37 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 <body class="mode-list" data-theme="dark">
 <header>
     <h1 title="History Guru — ChromeEdge Edition">History<span>Guru</span></h1>
-    <div class="s-box"><input type="text" id="sIn" class="s-in" placeholder="Search..."></div>
+    <div class="s-box">
+        <input type="text" id="sIn" class="s-in" placeholder="Search…  (man AND fish -river)" spellcheck="false">
+        <div class="s-tools">
+            <button id="sClear" class="s-tool" onclick="clearSearch()" title="Clear search" style="display:none">✕</button>
+            <button id="advBtn" class="s-tool" onclick="toggleAdvSearch()" title="Advanced search (AND / OR / exclude)">⚙</button>
+        </div>
+        <div id="advPanel" class="adv-panel hidden">
+            <div class="adv-row"><label>All of these</label><input id="advAll" placeholder="man fish" oninput="advCompose()"></div>
+            <div class="adv-row"><label>Any of these</label><input id="advAny" placeholder="sunset dawn" oninput="advCompose()"></div>
+            <div class="adv-row"><label>None of these</label><input id="advNone" placeholder="river blurry" oninput="advCompose()"></div>
+            <div class="adv-row"><label>Search in</label>
+                <select id="advField" onchange="advCompose()">
+                    <option value="">Everything</option>
+                    <option value="prompt">Positive prompt</option>
+                    <option value="neg">Negative prompt</option>
+                    <option value="name">Filename</option>
+                    <option value="model">Model</option>
+                    <option value="lora">LoRA / resources</option>
+                    <option value="path">Folder path</option>
+                </select></div>
+            <div class="adv-row"><label>Query</label><div id="advPreview" class="adv-preview"></div></div>
+            <div class="adv-hint">Type directly in the search box too. <code>AND</code> <code>OR</code> <code>NOT</code>, <code>-word</code> to exclude,
+                <code>"exact phrase"</code>, <code>( )</code> to group, and <code>field:value</code> — e.g.
+                <code>(man OR woman) AND fish -river model:flux</code>. Bare words are ANDed.</div>
+            <div class="adv-foot">
+                <span id="advErr" class="adv-err"></span><span class="spacer"></span>
+                <button class="dup-btn" onclick="advReset()">Clear</button>
+                <button class="dup-btn" onclick="toggleAdvSearch()">Done</button>
+            </div>
+        </div>
+    </div>
     <button class="btn" onclick="initFileSystem()">Open Folder</button>
     <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt)" onclick="fullScan()">↻</button>
     <div style="width:1px;height:24px;background:var(--bd)"></div>
@@ -168,11 +244,6 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
     <button id="helpBtn" class="btn-icon" onclick="showHelp()" title="Help & Shortcuts">❓</button>
     <button id="dupBtn" class="btn-icon" onclick="findDuplicates()" title="Find Duplicates">🔍</button>
     <button id="favFilterBtn" class="btn-icon" onclick="toggleFavoritesFilter()" title="Show Only Favorites">⭐</button>
-    <select id="sortSelect" class="btn" style="padding:8px 12px;font-size:0.85rem;" onchange="changeSort()" title="Sort By">
-        <option value="date">Date Modified</option>
-        <option value="name">Name</option>
-        <option value="created">Date Created</option>
-    </select>
 </header>
 <div class="layout">
     <aside id="sidebar" class="sidebar">
@@ -182,7 +253,21 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
     <div class="stage">
     <div id="gridToolbar" class="toolbar">
         <div id="pathDisplay">Root</div>
-        <div style="display:flex;align-items:center;gap:20px">
+        <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+            <div class="tb-group">
+                <span class="tb-lbl">Model</span>
+                <select id="modelFilter" class="tb-sel" onchange="changeModelFilter(this.value)" title="Filter by model"><option value="">All Models</option></select>
+            </div>
+            <div class="tb-group">
+                <span class="tb-lbl">Sort</span>
+                <select id="sortSelect" class="tb-sel" onchange="changeSort()" title="Sort By">
+                    <option value="date">Date Modified</option>
+                    <option value="created">Date Created</option>
+                    <option value="name">Name</option>
+                    <option value="model">Model</option>
+                </select>
+                <button id="sortDirBtn" class="tb-dir" onclick="toggleSortDir()" title="Toggle ascending / descending">↓</button>
+            </div>
             <div class="thumb-resizer">
                 <span>Small</span>
                 <input type="range" class="thumb-slider" min="128" max="320" step="48" value="224" id="thumbSlider" oninput="updateThumbSize(this.value)">
@@ -383,7 +468,7 @@ const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectSt
 
 // FS
 async function initFileSystem(){try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
-async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);await dAll();await scD(rH,"");rTree();await opD(null,"");document.getElementById('load').classList.add('hidden')}
+async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
 // NOTE: opD's filter is `!h || parentOf(file)===p`. Passing rH restricts the list to loose files
 // sitting directly in the root, so a library kept in subfolders renders empty. null = "All Files",
 // matching what the sidebar's All Files entry (which rTree marks active) already does.
@@ -706,7 +791,7 @@ function toggleTheme(){const body=document.body;const currentTheme=body.getAttri
 function toggleThumbnails(){const isOff=document.body.classList.toggle('no-thumbnails');if(isOff&&vMode==='grid')setView('list');localStorage.setItem('guru-thumbnails',isOff?'off':'on');updateThumbUI(!isOff);rend()}
 function updateThumbUI(show){const indicator=document.getElementById('thumbIndicator');if(indicator)indicator.style.color=show?'#4ade80':'#ef4444'}
 function updateThumbSize(val){document.documentElement.style.setProperty('--thumb-size',val+'px');localStorage.setItem('guru-thumb-size',val)}
-(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}})();
+(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}setTimeout(syncSortUI,0)})();
 function toggleFavorite(path){if(favorites.has(path)){favorites.delete(path)}else{favorites.add(path)}localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));rend()}
 // ===================== DUPLICATE DETECTION =====================
 // Content-based, filename-independent, spans every subfolder under the opened root.
@@ -1003,11 +1088,11 @@ let contextTarget=null,contextPath="",contextIsFile=false;
 function showContextMenu(e,element,path,isFile=false){e.preventDefault();contextTarget=element;contextPath=path;contextIsFile=isFile;const menu=document.getElementById('contextMenu');menu.style.display='block';menu.style.left=e.pageX+'px';menu.style.top=e.pageY+'px';document.addEventListener('click',hideContextMenu,{once:true})}
 function hideContextMenu(){document.getElementById('contextMenu').style.display='none';contextTarget=null;contextPath="";contextIsFile=false}
 async function contextDelete(){if(!contextPath)return;const name=contextPath.split('/').pop();if(!confirm(`Delete "${name}"? This cannot be undone.`))return;try{if(contextIsFile){const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);fReg.delete(contextPath);cache.delete(contextPath);await dDel(contextPath)}else{const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);dReg.delete(contextPath)}await fullScan();showToast('Deleted successfully','success')}catch(e){showToast('Delete failed: '+e.message,'error')}hideContextMenu()}
-function showHelp(){const content=document.getElementById('helpContent');content.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div><h3 style="color:var(--acc);margin-top:0;">⌨️ Keyboard Shortcuts</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[</kbd> / <kbd>]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🖱️ Mouse Actions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Select multiple (coming soon)</div><div><strong>Shift+Click</strong> Range select (coming soon)</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">📋 Functions</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter images by name/metadata</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style="color:var(--acc);margin-top:0;">🎯 Tips</h3><div style="display:grid;gap:8px;font-size:0.9rem;"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Search works on filenames and metadata</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower "items per page" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a "Keep" copy per group, then delete the rest</div></div></div></div>`;document.getElementById('helpOverlay').classList.remove('hidden')}
+function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code>.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
-async function opD(h,p){cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
+async function opD(h,p){cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;if(!passModel(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
 async function applySort(){
     if(sortBy==='name'){
         cFiles.sort((a,b)=>{
@@ -1048,20 +1133,63 @@ function sortByColumn(col){
         sortBy=col;
         sortDirection='asc';
     }
-    curPage=0;selectedIndex=-1;
+    curPage=0;selectedIndex=-1;syncSortUI();
     applySort().then(()=>rend());
 }
 function getSortArrow(col){
     if(sortBy===col)return sortDirection==='asc'?'↑':'↓';
     return'<span class="sort-arrow">↕</span>';
 }
+// The list-head columns and the toolbar dropdown drive the same two globals, so whichever one the
+// user touches, both have to end up showing the same thing. 'modified' and 'date' are the same sort.
+function syncSortUI(){
+    const s=document.getElementById('sortSelect');if(s)s.value=sortBy==='modified'?'date':sortBy;
+    const b=document.getElementById('sortDirBtn');
+    if(b){b.textContent=sortDirection==='asc'?'↑':'↓';b.title=sortDirection==='asc'?'Ascending — click for descending':'Descending — click for ascending'}
+}
 async function changeSort(){
     const val=document.getElementById('sortSelect').value;
-    if(val==='name'){sortBy='name';sortDirection='asc'}
-    else if(val==='created'){sortBy='created';sortDirection='desc'}
-    else{sortBy='date';sortDirection='desc'}
-    curPage=0;selectedIndex=-1;
+    // Sensible default direction per field: names read A→Z, dates read newest-first.
+    if(val!==sortBy)sortDirection=(val==='name'||val==='model')?'asc':'desc';
+    sortBy=val;
+    curPage=0;selectedIndex=-1;syncSortUI();
     await applySort();rend();
+}
+async function toggleSortDir(){
+    sortDirection=sortDirection==='asc'?'desc':'asc';
+    curPage=0;selectedIndex=-1;syncSortUI();
+    await applySort();rend();
+}
+
+// ===================== MODEL FILTER =====================
+// Lives in the toolbar rather than replacing the "Model" column header: the header has to stay a
+// plain sort target, and a toolbar control also works in grid view, where there is no header at all.
+let modelFilter="";
+const modelOf=p=>{const it=cache.get(p);return (it&&it.m&&it.m.meta&&it.m.meta.model)||""};
+const passModel=p=>!modelFilter||(modelFilter==='__none'?!modelOf(p):modelOf(p)===modelFilter);
+function buildModelFilter(){
+    const sel=document.getElementById('modelFilter');if(!sel)return;
+    const counts=new Map();let blank=0;
+    for(const p of fReg.keys()){const m=modelOf(p);if(m)counts.set(m,(counts.get(m)||0)+1);else blank++}
+    const names=[...counts.keys()].sort((a,b)=>a.localeCompare(b));
+    // A filter pinned to a model that no longer exists would silently show nothing.
+    if(modelFilter&&modelFilter!=='__none'&&!counts.has(modelFilter))modelFilter="";
+    sel.innerHTML=`<option value="">All Models (${fReg.size})</option>`
+        +names.map(n=>`<option value="${esc(n)}"${modelFilter===n?' selected':''}>${esc(n)} (${counts.get(n)})</option>`).join('')
+        +(blank?`<option value="__none"${modelFilter==='__none'?' selected':''}>— No model (${blank})</option>`:'');
+    sel.value=modelFilter;
+    sel.classList.toggle('filtered',!!modelFilter);
+}
+async function changeModelFilter(v){
+    modelFilter=v;
+    const sel=document.getElementById('modelFilter');if(sel)sel.classList.toggle('filtered',!!v);
+    await refreshList();
+}
+// Re-runs whichever listing is active - a live search, or the current folder.
+async function refreshList(){
+    const q=document.getElementById('sIn').value.trim();
+    if(q)return runSearch(q);
+    await opD(cDir,currP);
 }
 async function toggleFavoritesFilter(){showFavoritesOnly=!showFavoritesOnly;const btn=document.getElementById('favFilterBtn');btn.classList.toggle('active',showFavoritesOnly);btn.title=showFavoritesOnly?'Show All Files':'Show Only Favorites';let currentPath=document.getElementById('pathDisplay').innerText.replace(' (Favorites Only)','');if(currentPath==='All Files')currentPath=null;await opD(cDir,currentPath)}
 
@@ -1358,7 +1486,9 @@ document.addEventListener('keydown',e=>{
         if(e.key==='Escape'){e.preventDefault();closeJsonDialog()}
         return;
     }
-    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'){if(e.key==='Escape'){e.target.blur();hideHelp()}return}
+    if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'){
+        if(e.key==='Escape'){const ap=document.getElementById('advPanel');if(ap&&!ap.classList.contains('hidden'))toggleAdvSearch();e.target.blur();hideHelp()}
+        return}
     if(document.body.classList.contains('mode-detail')){if(e.key==='ArrowRight')nav(1);if(e.key==='ArrowLeft')nav(-1);if(e.key==='Escape')exitDetail();return}
     if(e.key==='?'||(e.shiftKey&&e.key==='?')){e.preventDefault();showHelp();return}
     if(e.key==='Escape'){
@@ -1676,44 +1806,135 @@ async function renameFile(){
         alert("Rename failed: " + e.message);
     }
 }
-document.getElementById('sIn').addEventListener('input',async e=>{
-    const t=e.target.value.toLowerCase().trim();
-    if(!t){
-        await opD(cDir,cDir===rH?"":Array.from(dReg.entries()).find(([k,v])=>v===cDir)?.[0]||"");
-        return;
+// ===================== ADVANCED SEARCH =====================
+// Boolean query language over the metadata cache. Grammar (bare words are ANDed, so a plain
+// "man fish" still behaves the way the old substring search did for a single word):
+//   or    := and (OR and)*
+//   and   := unary (AND? unary)*
+//   unary := ('-'|'!'|NOT) unary | '(' or ')' | term
+//   term  := [field:]("quoted phrase" | word)
+const FIELD_ALIAS={file:'name',filename:'name',fn:'name',folder:'path',dir:'path',pos:'prompt',positive:'prompt',prompt:'prompt',negative:'neg',neg:'neg',model:'model',checkpoint:'model',ckpt:'model',sampler:'sampler',seed:'seed',steps:'steps',cfg:'cfg',size:'size',dim:'size',resolution:'size',lora:'lora',resource:'lora',res:'lora',name:'name',path:'path'};
+
+function advTokenize(q){
+    const T=[],ws=c=>/\s/.test(c);let i=0;
+    while(i<q.length){
+        const c=q[i];
+        if(ws(c)){i++;continue}
+        if(c==='('){T.push({t:'lp'});i++;continue}
+        if(c===')'){T.push({t:'rp'});i++;continue}
+        // Only a negation at the start of a token — a '-' inside a word (2026-07-21) is just text.
+        if(c==='-'||c==='!'){T.push({t:'not'});i++;continue}
+        let field='',val='',j=i,f='';
+        while(j<q.length&&/[a-zA-Z_]/.test(q[j]))f+=q[j++];
+        if(f&&q[j]===':'&&j+1<q.length&&!ws(q[j+1])){field=f.toLowerCase();i=j+1}
+        if(q[i]==='"'){i++;while(i<q.length&&q[i]!=='"')val+=q[i++];i++}
+        else while(i<q.length&&!ws(q[i])&&q[i]!=='('&&q[i]!==')')val+=q[i++];
+        if(!val)continue;
+        const up=val.toUpperCase();
+        if(!field&&(up==='AND'||up==='OR'||up==='NOT')){T.push({t:up.toLowerCase()});continue}
+        T.push({t:'term',field,val:val.toLowerCase()});
     }
-    const a=[];
+    return T;
+}
+function advParse(q){
+    const T=advTokenize(q);let k=0;const peek=()=>T[k];
+    function pOr(){let n=pAnd();if(!n)return null;while(peek()&&peek().t==='or'){k++;const r=pAnd();if(!r)break;n={t:'or',a:n,b:r}}return n}
+    function pAnd(){let n=pUn();if(!n)return null;
+        for(;;){const p=peek();if(!p||p.t==='or'||p.t==='rp')break;
+            if(p.t==='and')k++;
+            const r=pUn();if(!r)break;n={t:'and',a:n,b:r}}
+        return n}
+    function pUn(){const p=peek();if(!p)return null;
+        if(p.t==='not'){k++;const r=pUn();return r?{t:'not',a:r}:null}
+        if(p.t==='lp'){k++;const n=pOr();if(peek()&&peek().t==='rp')k++;return n}
+        if(p.t==='term'){k++;return p}
+        k++;return pUn()}                       // stray operator: skip it rather than fail
+    return pOr();
+}
+// f.all joins the fields with a double space so a "quoted phrase" cannot straddle a boundary.
+function searchFields(p,v){
+    const m=v.m||{},meta=m.meta||{};
+    const f={name:(v.n||'').toLowerCase(),path:p.toLowerCase(),
+        prompt:(m.pos||'').toLowerCase(),neg:(m.neg||'').toLowerCase(),
+        model:(meta.model||'').toLowerCase(),sampler:(meta.sampler||'').toLowerCase(),
+        seed:String(meta.seed==null?'':meta.seed).toLowerCase(),
+        steps:String(meta.steps==null?'':meta.steps).toLowerCase(),
+        cfg:String(meta.cfg==null?'':meta.cfg).toLowerCase(),
+        size:String(v.dim||meta.size||'').toLowerCase(),
+        lora:(m.resources||[]).map(r=>`${r.type||''} ${r.name||''}`).join(' ').toLowerCase()};
+    f.all=[f.name,f.path,f.prompt,f.neg,f.model,f.sampler,f.seed,f.steps,f.cfg,f.size,f.lora].join('  ');
+    return f;
+}
+function advEval(n,f){
+    if(!n)return true;
+    if(n.t==='and')return advEval(n.a,f)&&advEval(n.b,f);
+    if(n.t==='or')return advEval(n.a,f)||advEval(n.b,f);
+    if(n.t==='not')return !advEval(n.a,f);
+    const key=n.field?(FIELD_ALIAS[n.field]||n.field):'all';
+    return (f[key]!==undefined?f[key]:f.all).includes(n.val);
+}
+async function runSearch(q){
+    const ast=advParse(q),a=[];
     for(const[p,v]of cache){
         if(!v)continue;
-        const fh=fReg.get(p);
-        if(!fh)continue;
-        let matches=false;
-        const fileName=(v.n||'').toLowerCase();
-        if(fileName.includes(t)){matches=true}
-        if(!matches&&v.m){
-            const m=v.m;
-            if(m.pos&&m.pos.toLowerCase().includes(t)){matches=true}
-            if(!matches&&m.neg&&m.neg.toLowerCase().includes(t)){matches=true}
-            if(!matches&&m.meta){
-                const meta=m.meta;
-                if(meta.model&&meta.model.toLowerCase().includes(t)){matches=true}
-                if(!matches&&meta.sampler&&meta.sampler.toLowerCase().includes(t)){matches=true}
-                if(!matches&&meta.seed&&meta.seed.toString().includes(t)){matches=true}
-                if(!matches&&meta.steps&&meta.steps.toString().includes(t)){matches=true}
-                if(!matches&&meta.cfg&&meta.cfg.toString().includes(t)){matches=true}
-                if(!matches&&meta.size&&meta.size.toLowerCase().includes(t)){matches=true}
-            }
-            if(!matches&&m.resources&&Array.isArray(m.resources)){
-                for(const r of m.resources){
-                    if(r.name&&r.name.toLowerCase().includes(t)){matches=true;break}
-                }
-            }
-        }
-        if(matches){a.push({p,h:fh,d:v.d||0,n:v.n||fh.name})}
+        const fh=fReg.get(p);if(!fh)continue;
+        if(showFavoritesOnly&&!favorites.has(p))continue;
+        if(!passModel(p))continue;
+        if(!advEval(ast,searchFields(p,v)))continue;
+        a.push({p,h:fh,d:v.d||0,n:v.n||fh.name});
     }
-    cFiles=a;
-    curPage=0;selectedIndex=-1;
-    await applySort();
-    rend();
+    cFiles=a;curPage=0;selectedIndex=-1;
+    await applySort();rend();
+}
+
+let searchT=null;
+function scheduleSearch(q){clearTimeout(searchT);searchT=setTimeout(()=>{q?runSearch(q):opD(cDir,currP)},160)}
+function setClearVis(on){const b=document.getElementById('sClear');if(b)b.style.display=on?'flex':'none'}
+document.getElementById('sIn').addEventListener('input',e=>{
+    const raw=e.target.value;
+    setClearVis(!!raw);e.target.classList.remove('adv-on');
+    scheduleSearch(raw.trim());
 });
+function clearSearch(){
+    const i=document.getElementById('sIn');i.value='';i.classList.remove('adv-on');setClearVis(false);
+    ['advAll','advAny','advNone'].forEach(x=>{const el=document.getElementById(x);if(el)el.value=''});
+    const pv=document.getElementById('advPreview');if(pv)pv.textContent='—';
+    clearTimeout(searchT);opD(cDir,currP);
+}
+function toggleAdvSearch(){
+    const p=document.getElementById('advPanel'),b=document.getElementById('advBtn');
+    const open=!p.classList.toggle('hidden');
+    b.classList.toggle('active',open);
+    if(open){advCompose();document.getElementById('advAll').focus()}
+}
+// Splits on whitespace but keeps "quoted phrases" together.
+function advWords(s){const out=[],re=/"([^"]*)"|(\S+)/g;let m;while((m=re.exec(s)))out.push(m[1]!==undefined?m[1]:m[2]);return out.filter(Boolean)}
+const advQuote=w=>/[\s()"]/.test(w)?`"${w.replace(/"/g,'')}"`:w;
+// The three boxes are a front-end for the query syntax, not a separate engine: they compose a query
+// string, drop it in the search box, and run it. The preview shows what they produced.
+function advCompose(){
+    const pre=(document.getElementById('advField').value||'');
+    const wrap=w=>(pre?pre+':':'')+advQuote(w);
+    const all=advWords(document.getElementById('advAll').value).map(wrap);
+    const any=advWords(document.getElementById('advAny').value).map(wrap);
+    const non=advWords(document.getElementById('advNone').value).map(w=>'-'+wrap(w));
+    const parts=[];
+    if(all.length)parts.push(all.join(' AND '));
+    if(any.length)parts.push(any.length>1?'('+any.join(' OR ')+')':any[0]);
+    if(non.length)parts.push(non.join(' '));
+    const q=parts.join(' AND ');
+    document.getElementById('advPreview').textContent=q||'—';
+    const inp=document.getElementById('sIn');
+    inp.value=q;inp.classList.toggle('adv-on',!!q);setClearVis(!!q);
+    scheduleSearch(q);
+}
+function advReset(){
+    ['advAll','advAny','advNone'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('advField').value='';advCompose();
+}
+document.addEventListener('mousedown',e=>{
+    const p=document.getElementById('advPanel');
+    if(p&&!p.classList.contains('hidden')&&!e.target.closest('.s-box'))toggleAdvSearch();
+});
+// =================== END ADVANCED SEARCH ===================
 </script></body></html>

@@ -1,4 +1,4 @@
-# History Guru 🧘‍♂️ v4.3.0 (ChromeEdge Edition)
+# History Guru 🧘‍♂️ v4.4.0 (ChromeEdge Edition)
 
 > **The 100% Offline, Single-File File Manager & Metadata Viewer for AI Images.**
 
@@ -28,8 +28,17 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   **Cinema Mode:** A split-screen "Detail View" for full-height image inspection alongside live metadata editing.
 *   **Memory Safety:** Systematic `URL Lifecycle Management` and debounced URL revocation ensure smooth performance even with 1000+ images.
 
+### 🔎 Advanced Search & Filtering
+*   **Boolean Query Language:** Bare words are ANDed, plus `AND` / `OR` / `NOT`, `-exclusions`, `"quoted phrases"`, and `( )` grouping — e.g. `(man OR woman) AND fish -river model:flux`.
+*   **Field-Scoped Terms:** Aim a term at one field with `field:value` — `name` `path` `prompt` `neg` `model` `sampler` `seed` `steps` `cfg` `size` `lora`, plus aliases like `file`, `folder`, `positive`, `negative`, `checkpoint`, `resolution`.
+*   **Query Builder:** The ⚙ button opens an *All of these / Any of these / None of these* panel with a "Search in" field selector. It shows a live preview of the query it generates and drops it into the search box, so it teaches the syntax instead of hiding it.
+*   **Model Filter:** A toolbar dropdown of every checkpoint in your library with per-model file counts (and a `— No model` bucket), composable with both the text search and the ⭐ favorites filter.
+*   **Toolbar Sorting:** Sort field and an ascending/descending toggle now sit in the toolbar — with **Model** as a new sort key — and stay in sync with the clickable list-view column headers.
+*   **Built-In Reference:** Press `?` for a full syntax cheat sheet of every operator and field.
+
 ### 🌗 Daylight & Night Modes
 *   **Universal Parity:** Reworked Light Mode with theme-aware CSS variables. Overlays, labels, and selection highlights are high-contrast and perfectly legible in bright environments.
+*   **Themed Scrollbars:** The folder tree, main view, inspector, and JSON viewer all use styled scrollbars tuned for both themes.
 
 ### 🔍 Content-Based Duplicate Detection
 *   **Three-Stage Pipeline:** Escalates from free size-bucketing, to a partial 64KB hash, to a full SHA-256 — so libraries with thousands of images stay fast; only true collisions ever get fully hashed.
@@ -48,6 +57,7 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 ### 🎬 Expanded Format Support
 *   Added **GIF**, **MOV**, and **MKV** alongside PNG/JPEG/WebP and MP4/WebM. Unplayable video containers fall back to a labelled placeholder tile instead of a blank thumbnail.
 *   **Safer "Fix & Save":** Animated GIF/WebP now prompt before flattening to a single frame, and non-image files are rejected before anything is written.
+*   **Video metadata — not yet supported:** Videos are listed, played, and managed, but their metadata is not parsed — no prompts, workflow, or true resolution, just a `Video` placeholder and the file size. Sample ComfyUI video files are needed before this can be built and verified.
 
 ---
 
@@ -91,6 +101,14 @@ MIT License - Free to use, modify, and distribute for the AI art community.
 ---
 
 ## 🚀 Version History
+
+### [4.4.0] - 2026-07-26
+- **Advanced Search**: The search box now parses a real query language — AND/OR/NOT, `-exclusions`, `"phrases"`, `( )` grouping, and `field:value` terms across name, path, prompts, model, sampler, seed, steps, cfg, size, and LoRAs.
+- **Search Builder**: A ⚙ panel composes *All / Any / None* terms plus a field selector into that syntax, with a live query preview; the box also gained an ✕ clear button.
+- **Model Filter & Toolbar Sorting**: Filter by checkpoint (with per-model counts) from the toolbar, and sort from the toolbar with an asc/desc toggle and a new **Model** key, kept in sync with the list-view headers.
+- **Themed Scrollbars**: Tree, main view, inspector, and JSON viewer scrollbars now follow the active theme.
+- **Fixed**: Sticky list/duplicate toolbars no longer sit 20px down with images scrolling through the gap above them; list header columns now line up with their rows; the search box lost phantom icon padding and gained a minimum width; the ⭐ favorites filter is now respected while searching; search input is debounced.
+- **Still unsupported**: Video metadata extraction — see `docs/VIDEO-METADATA.md` (local-only) for findings and a proposal.
 
 ### [4.3.0] - 2026-07-26 (ChromeEdge-only fork)
 - **Duplicate Detection Rebuilt**: Replaced the old pairs-only 50KB hash with a 3-stage (size → partial hash → full SHA-256) scanner that finds true n-way groups, plus a full review UI with keep/delete selection and auto-select modes.
