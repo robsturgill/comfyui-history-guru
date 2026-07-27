@@ -2,6 +2,37 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [4.5.0] - 2026-07-26
+
+### Added
+- **🎬 Video Metadata Extraction**: Videos are no longer a blind spot. `readVideoMeta()` walks the container and hands the result to the existing parser, so prompts, model, seed, steps, CFG, sampler and LoRAs populate for MP4/MOV/WebM/MKV exactly as they do for PNGs.
+  - **MP4 / MOV**: `moov → udta → meta → ilst`, supporting both the `mdta` keys table and the classic iTunes atoms. Worth recording that **every real sample used `©cmt`, not `mdta`** — the opposite of what the research doc predicted from ffmpeg's `-movflags use_metadata_tags` path.
+  - **WebM / MKV**: the Matroska `Tags → Tag → SimpleTag → TagString` chain. Clusters are skipped by arithmetic and never read.
+  - **Never buffers the file.** The box/element chain is walked with `File.slice()`, so only `moov` (or `Tags`/`Tracks`) is ever read. A naive `arrayBuffer()` would have pulled hundreds of megabytes into memory per item and undone the pagination/lazy-load work from 4.3.0.
+- **📐 True Video Resolution**: Read from the container's `tkhd` box (its final 8 bytes, which is version-independent) or Matroska `PixelWidth`/`PixelHeight`. The Size field shows `1024x1536` instead of the `8.7MB` filesize string that used to sit in that slot. Audio tracks report `0x0` and are filtered out. Verified against `stsd` coded sizes on every sample.
+- **🔓 JSON Wrapper Unwrapping**: ComfyUI/VHS store the graph as a JSON **string** inside a wrapper object — `{"prompt": "{\"6\": {\"class_type\": ...}}"}`. The backslash escaping means the literal `"class_type"` never appears, so `parseMetadata()`'s content sniff silently found nothing. `unwrapMeta()` pulls the inner documents out first. This one detail was the difference between "video metadata works" and "video metadata parses to nothing".
+- **⚙️ Flat Settings-Dict Parser**: `parseSettings()` handles generators that write a settings dictionary rather than a node graph (WanGP/DeepBeepMeep and similar), mapping `negative_prompt`, `resolution`, `num_inference_steps`, `guidance_scale`, `activated_loras`/`loras_multipliers` and `model_type` onto the standard fields.
+- **📄 JSON / Workflow Viewer Now Opens on Videos**: The hard-coded `'Videos carry no embedded workflow.'` toast is gone — it was simply wrong. Videos get the same dialog, syntax highlighting, clickable node outline and search. A wrapper containing JSON documents becomes one tab per document; a flat settings dict stays a single tab rather than sixty scalar ones.
+- **🖼️ Animated PNG & WebP Metadata**: `comf` chunks (ComfyUI `SaveAnimatedPNG`) are now read as `tEXt`, and `extractWebPExif()` parses the RIFF `EXIF` chunk → TIFF IFD0 → ASCII tags `0x0110`/`0x010F`, stripping the `prompt:`/`workflow:` prefix. Previously WebP fell through to decoding the entire file as text and hoping the JSON survived.
+- **🔄 In-Place Cache Upgrade**: Cached videos carry a `vm` version stamp; `backfillDim()` re-runs `proc()` for any entry behind the current `VMETA`. Video metadata improvements reach existing libraries without bumping the DB name and discarding every image's cached parse.
+
+### Fixed
+- **Negative prompts duplicated the positive prompt** — on images as well as videos. Three separate causes in `findUpstreamText()`:
+  - **Output slot indices were ignored.** Following `["50", 0]` and `["50", 1]` both landed on node 50 and then collected *both* its `positive` and `negative` upstreams, so the two fields came out identical. Nodes carrying both conditioning inputs (`WanImageToVideo` and most `*ToVideo`/guider nodes) now honour the slot.
+  - **`inputs.text` was added twice** — once by the explicit check, then again by the generic sweep whose `key.includes('text')` test matches the key `text`, concatenated with no separator so prompts appeared doubled end-to-end.
+  - **`ConditioningZeroOut` echoed the positive prompt into the negative field.** Flux/Chroma graphs wire the positive encoder into it precisely to produce an *empty* negative, so recursing through it reported the positive text. It now returns empty. The bundled PNG samples correctly show a blank negative as a result — that is the correct reading of those workflows, not a regression.
+- **Seed displayed a raw node reference, and Model came out blank** (images; found while tracing the video prompts). `meta.seed` printed `["182",0]` whenever the seed came from a `Seed (rgthree)`/Primitive node instead of a literal. `resolveNum` already followed references generically but sat *after* the sampler block and only knew the width/height slot convention; it moved above and gained an optional `keys` parameter, so `seed` and `noise_seed` resolve independently — a referenced seed that fails no longer shadows a literal `noise_seed`, which is the shape the ComfyUI VHS videos use. `findUpstreamModel` returned `""` whenever the model port ran through a passthrough node (`ComfySwitchNode` carries it on `on_true`/`on_false` and has none of the four loader fields); it now falls back to following any input that is a node reference, with a regex skipping ports carrying other data types and a `seen` set preventing cycles. All ten bundled PNG samples go from 0/10 to 10/10 fully resolved.
+- **Videos were unsearchable by anything meaningful**: they only ever indexed `"8.7mb"` in the size field. They now match on prompt text, model, LoRA, seed and real resolution.
+- **Statistics counted every video as a single `Video` model**, inflating that bucket and hiding real checkpoints. Parsed videos now report their actual model and LoRAs.
+
+### Unchanged by design
+- **"Fix & Save" remains images-only.** Rewriting a `moov` means recomputing every `stco`/`co64` chunk offset in the file; there is no safe hand-rolled version of that, and getting it wrong corrupts the video. The existing guard is correct and stays.
+- **Videos with no AI metadata keep the `Video` placeholder** (one of the bundled samples is a Grok video whose `©cmt` holds only a signature blob). They still get their real resolution, so the fallback is strictly better than before rather than a dead end.
+
+### Notes
+- ComfyUI VHS MP4s in hand contain `prompt` but **no** `workflow` key, matching [VideoHelperSuite #486](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite/issues/486). Handled gracefully; nothing recoverable on our side if the bytes were never written.
+- The APNG `comf` and WebP EXIF paths had no real sample to test against. Both were verified against files synthesized from the ComfyUI writer's own layout, but a genuine `SaveAnimatedPNG`/`SaveAnimatedWEBP` output is worth a recheck.
+
 ## [4.4.0] - 2026-07-26
 
 ### Added

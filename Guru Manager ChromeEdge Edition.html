@@ -546,6 +546,46 @@ function extractEXIFUserCommentFromJPEG(buffer) {
     return null;
 }
 
+// ComfyUI's SaveAnimatedWEBP writes prompt/workflow as EXIF ASCII tags rather than a text chunk -
+// 0x0110 (Model) holds "prompt:{...}" and 0x010F (Make) holds "workflow:{...}", further keys walking
+// downwards. Pillow puts that TIFF block in the RIFF 'EXIF' chunk. Returns "" when absent, so the
+// caller falls back to its previous behaviour.
+function extractWebPExif(buffer){
+    try{
+        const v=new DataView(buffer);
+        if(v.getUint32(0)!==0x52494646||v.byteLength<20||v.getUint32(8)!==0x57454250)return "";
+        let o=12,ex=-1,exLen=0;
+        while(o+8<=v.byteLength){
+            const cc=String.fromCharCode(v.getUint8(o),v.getUint8(o+1),v.getUint8(o+2),v.getUint8(o+3));
+            const len=v.getUint32(o+4,true);
+            if(cc==='EXIF'){ex=o+8;exLen=len;break}
+            o+=8+len+(len&1);                                   // RIFF chunks pad to an even length
+        }
+        if(ex<0||ex+8>v.byteLength)return "";
+        let t=ex;
+        if(v.getUint32(t)===0x45786966)t+=6;                    // some writers prepend "Exif\0\0"
+        const le=v.getUint16(t)===0x4949;                       // II = little-endian, MM = big
+        if(v.getUint16(t+2,le)!==0x2A)return "";
+        const ifd=t+v.getUint32(t+4,le);
+        if(ifd+2>v.byteLength)return "";
+        const n=v.getUint16(ifd,le);
+        let out="";
+        for(let i=0;i<n;i++){
+            const e=ifd+2+i*12;
+            if(e+12>v.byteLength)break;
+            const typ=v.getUint16(e+2,le),cnt=v.getUint32(e+4,le);
+            if(typ!==2||cnt<2)continue;                         // ASCII entries only
+            const off=cnt<=4?e+8:t+v.getUint32(e+8,le);
+            if(off<0||off+cnt>v.byteLength)continue;
+            let s=new TextDecoder('utf-8',{fatal:false}).decode(new Uint8Array(buffer,off,cnt)).replace(/\0+$/,'');
+            const c=s.indexOf(':');
+            if(c>0&&/^[a-z_]+$/i.test(s.slice(0,c)))s=s.slice(c+1);   // strip the "prompt:" prefix
+            if(s.trim())out+=s+"\n";
+        }
+        return out;
+    }catch(e){return ""}
+}
+
 async function extractText(buffer) {
     const view = new DataView(buffer); 
     let fullText = ""; 
@@ -558,7 +598,9 @@ async function extractText(buffer) {
                 const type = String.fromCharCode(...new Uint8Array(buffer, offset + 4, 4)); 
                 if (offset + 8 + len > view.byteLength) break; 
                 const data = new Uint8Array(buffer, offset + 8, len); 
-                if (type === 'tEXt' || type === 'iTXt') {
+                // 'comf' is ComfyUI's SaveAnimatedPNG chunk (written after IDAT). Its payload is the
+                // exact tEXt shape - keyword \0 json - just under a different chunk type.
+                if (type === 'tEXt' || type === 'iTXt' || type === 'comf') {
                     try { fullText += new TextDecoder('utf-8').decode(data).replace(/\0/g, '') + "\n"; } 
                     catch(e) { fullText += new TextDecoder('latin1').decode(data).replace(/\0/g, '') + "\n"; }
                 } else if (type === 'zTXt') { 
@@ -572,9 +614,15 @@ async function extractText(buffer) {
                 if (type === 'IEND') break;
             }
         } else if (view.getUint32(0) === 0x52494646 || view.getUint16(0) === 0xFFD8) {
-            const exifText = extractEXIFUserCommentFromJPEG(buffer);
-            if (exifText) fullText = exifText;
-            else fullText = new TextDecoder().decode(new Uint8Array(buffer));
+            // WebP keeps its EXIF in a RIFF chunk, not a JPEG APP1 marker, so try that first -
+            // otherwise this falls through to decoding the entire file as text and hoping.
+            const webpText = view.getUint32(0) === 0x52494646 ? extractWebPExif(buffer) : "";
+            if (webpText) fullText = webpText;
+            else {
+                const exifText = extractEXIFUserCommentFromJPEG(buffer);
+                if (exifText) fullText = exifText;
+                else fullText = new TextDecoder().decode(new Uint8Array(buffer));
+            }
         }
     } catch(e) {
         console.warn('Metadata extraction error:', e);
@@ -593,22 +641,31 @@ function parseComfy(json) {
     const findUpstreamText=(l,d=0)=>{
         if(d>10||!l||!Array.isArray(l))return"";
         let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(!inputs&&!n.widgets_values)return"";
+        // ConditioningZeroOut discards whatever it is handed. Flux/Chroma graphs wire the *positive*
+        // encoder into it to synthesise an empty negative, so recursing through would echo the
+        // positive prompt back into the negative field.
+        if((n.class_type||n.type||"")==='ConditioningZeroOut')return"";
         let t = "";
+        // Keys consumed below are recorded so the generic sweep in step 3 doesn't add them a second
+        // time - `text` matches its own key.includes('text') test, which used to double every prompt.
+        const used = new Set();
         // 1. Local Text (from widgets_values for workflow format)
         if(Array.isArray(n.widgets_values)&&n.widgets_values.length>0&&typeof n.widgets_values[0]==='string')t+=n.widgets_values[0];
         // 2. Standard text inputs (known patterns)
-        if(typeof inputs.text==='string') t+=(t?", ":"")+inputs.text;
+        if(typeof inputs.text==='string') {t+=(t?", ":"")+inputs.text;used.add('text')}
         else if(Array.isArray(inputs.text)) {
             // Text is a node reference (e.g., ["1", 0]) - recurse into it
             const r = findUpstreamText(inputs.text,d+1);
             if(r) t+=(t?", ":"")+r;
+            used.add('text');
         }
-        if(typeof inputs.text_g==='string') t+=(t?", ":"")+inputs.text_g;
-        if(typeof inputs.text_l==='string') t+=(t?", ":"")+inputs.text_l;
-        if(inputs.string_field) t+=(t?", ":"")+inputs.string_field;
+        if(typeof inputs.text_g==='string') {t+=(t?", ":"")+inputs.text_g;used.add('text_g')}
+        if(typeof inputs.text_l==='string') {t+=(t?", ":"")+inputs.text_l;used.add('text_l')}
+        if(inputs.string_field) {t+=(t?", ":"")+inputs.string_field;used.add('string_field')}
         // 3. Generic string input extraction (handles StringConcatenate, StringJoin, etc. without hardcoding)
         // Look for any input that starts with "string_" or is a string value
         for(const key in inputs){
+            if(used.has(key))continue;
             if(key.startsWith('string_')||key.startsWith('str_')||key.includes('text')||key.includes('prompt')){
                 const val=inputs[key];
                 if(typeof val==='string'&&val.length>0){
@@ -626,8 +683,14 @@ function parseComfy(json) {
             const tags = inputs.trigger_words_display.__value__.filter(x=>x.active).map(x=>x.text).join(", ");
             if(tags) t+=(t?", ":"")+tags;
         }
-        // 5. Recurse through known link keys
-        const keys=['positive','negative','conditioning','clip','prompt','trigger_words'];
+        // 5. Recurse through known link keys. A node carrying BOTH positive and negative conditioning
+        // (WanImageToVideo and most *ToVideo / guider nodes) emits them on separate output slots, so
+        // following both would splice the negative prompt onto the positive one. Honor the slot we
+        // arrived on: [nodeId, 0] is positive, [nodeId, 1] is negative.
+        const slot = typeof l[1]==='number' ? l[1] : 0;
+        const keys = (inputs.positive&&inputs.negative)
+            ? [slot===1?'negative':'positive']
+            : ['positive','negative','conditioning','clip','prompt','trigger_words'];
         for(const k of keys) if(inputs[k]) {
             const r = findUpstreamText(inputs[k],d+1);
             if(r) t+=(t?", ":"")+r;
@@ -645,10 +708,32 @@ function parseComfy(json) {
         return t;
     };
 
-    const findUpstreamModel=(l,d=0)=>{if(d>10||!l||!Array.isArray(l))return"";let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model)return findUpstreamModel(inputs.model,d+1);return""};
+    // Inputs that carry something other than a model, so the generic walk below never follows them.
+    const notModel=/clip|vae|image|latent|mask|cond|positive|negative|text|prompt|guider|sigmas|seed/;
+    const findUpstreamModel=(l,d=0,seen)=>{if(d>10||!l||!Array.isArray(l))return"";seen=seen||new Set();let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){if(seen.has(l[0]))return"";seen.add(l[0]);n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model){const r=findUpstreamModel(inputs.model,d+1,seen);if(r)return r}
+        // Passthrough/switch/reroute nodes name their model port anything (on_true, input, any_01),
+        // so fall back to following every node reference that isn't obviously another data type.
+        for(const k in inputs){if(k==='model'||notModel.test(k))continue;const v=inputs[k];if(Array.isArray(v)&&v.length&&(typeof v[0]==='string'||typeof v[0]==='number')){const r=findUpstreamModel(v,d+1,seen);if(r)return r}}
+        return""};
+    // width/height are frequently node references (e.g. ["49",0]) rather than literals, and so is
+    // seed (a Seed/Primitive node). Resolve them, and never emit a non-numeric value - interpolating
+    // the raw array produced sizes like "49,0x49,1". `keys` names the inputs to read off a referenced
+    // node; width/height omit it and pick by output slot instead.
+    const resolveNum=(val,d=0,keys=null)=>{
+        if(typeof val==='number')return val;
+        if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
+        if(Array.isArray(val)&&val.length&&d<8){
+            const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
+            const inp=n.inputs||{},ks=keys||[val[1]===1?'height':'width'];
+            for(const k of ks)if(typeof inp[k]==='number')return inp[k];
+            if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
+            for(const k of ks.concat(['value','number','int'])){const r=resolveNum(inp[k],d+1,keys);if(r!=null)return r}
+        }
+        return null;
+    };
     const samplerTypes = ["KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerEulerAncestralCFGPP", "SamplerLCM"];
     const ksampler=nodes.find(n=>n.class_type&&samplerTypes.some(type=>n.class_type.includes(type)));
-    if(ksampler){const inputs=ksampler.inputs||{};meta.seed=inputs.seed||inputs.noise_seed||"?";meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
+    if(ksampler){const inputs=ksampler.inputs||{};const sv=inputs.seed!==undefined?inputs.seed:inputs.noise_seed;let sr=resolveNum(inputs.seed,0,['seed','noise_seed']);if(sr==null)sr=resolveNum(inputs.noise_seed,0,['seed','noise_seed']);meta.seed=sr!=null?sr:(Array.isArray(sv)?"?":(sv||"?"));meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
     
     nodes.forEach(n=>{
         const nodeType = n.class_type || "";
@@ -660,20 +745,6 @@ function parseComfy(json) {
         if(nodeType.includes("IPAdapter") && inputs.ipadapter_file) resources.push({type:'IP-Adapter', name:inputs.ipadapter_file, str:inputs.weight || "1.0"});
     });
     const sizeNodes = ["EmptyLatentImage", "LatentUpscale", "LatentComposite", "EmptySD3LatentImage"];
-    // width/height are frequently node references (e.g. ["49",0]) rather than literals. Resolve them,
-    // and never emit a non-numeric value - interpolating the raw array produced sizes like "49,0x49,1".
-    const resolveNum=(val,d=0)=>{
-        if(typeof val==='number')return val;
-        if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
-        if(Array.isArray(val)&&val.length&&d<8){
-            const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
-            const inp=n.inputs||{},slot=val[1]===1?'height':'width';
-            if(typeof inp[slot]==='number')return inp[slot];
-            if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
-            for(const k of [slot,'value','number','int']){const r=resolveNum(inp[k],d+1);if(r!=null)return r}
-        }
-        return null;
-    };
     const sizeNode=nodes.find(n=>sizeNodes.includes(n.class_type));
     if(sizeNode){const inputs=sizeNode.inputs||{};const wv=resolveNum(inputs.width),hv=resolveNum(inputs.height);if(wv>0&&hv>0)meta.size=`${Math.round(wv)}x${Math.round(hv)}`}
     return {pos,neg,meta,resources};
@@ -731,6 +802,244 @@ function readDims(buffer){
 }
 const dimStr=d=>d&&d.w&&d.h?`${d.w}x${d.h}`:null;
 
+// ===================== VIDEO CONTAINER METADATA =====================
+// Bump when the video parser changes shape - cached video items stamped with an older VMETA get
+// re-read on the next scan (see backfillDim), so improvements land without nuking the whole DB.
+const VMETA=1;
+const MOOV_CAP=32*1024*1024;   // a moov this large is a broken file, not a workflow worth reading
+const fcc=(v,o)=>String.fromCharCode(v.getUint8(o),v.getUint8(o+1),v.getUint8(o+2),v.getUint8(o+3));
+const utf8=(v,s,e)=>new TextDecoder('utf-8',{fatal:false}).decode(new Uint8Array(v.buffer,v.byteOffset+s,e-s));
+
+// Iterate the ISOBMFF child boxes in [s,e), calling fn(type, dataStart, dataEnd).
+function mp4Boxes(v,s,e,fn){
+    let o=s;
+    while(o+8<=e){
+        let sz=v.getUint32(o),hdr=8;const t=fcc(v,o+4);
+        if(sz===1){if(o+16>e)break;sz=Number(v.getBigUint64(o+8));hdr=16}   // 64-bit size escape
+        else if(sz===0)sz=e-o;                                             // "to end of file"
+        if(sz<hdr||o+sz>e)break;
+        fn(t,o+hdr,o+sz);
+        o+=sz;
+    }
+}
+
+// Pull tkhd dimensions and the udta/meta tag list out of an already-loaded moov.
+function mp4Moov(v,s,e){
+    let dim=null;const keys=[],items=[];
+    const walk=(a,b)=>mp4Boxes(v,a,b,(t,ds,de)=>{
+        if(t==='tkhd'){
+            // width/height are the last 8 bytes of the box in both versions, so reading from the end
+            // avoids branching on version. Audio tracks carry 0x0 - take the first real one.
+            const w=v.getUint32(de-8)>>>16,h=v.getUint32(de-4)>>>16;
+            if(w>0&&h>0&&!dim)dim={w,h};
+        }
+        else if(t==='trak'||t==='udta'||t==='mdia')walk(ds,de);
+        // meta is a FullBox for ffmpeg/ISO but Apple sometimes omits version/flags - peek for hdlr.
+        else if(t==='meta')walk(fcc(v,ds+4)==='hdlr'?ds:ds+4,de);
+        else if(t==='keys'){
+            const n=v.getUint32(ds+4);let k=ds+8;
+            for(let i=0;i<n&&k+8<=de;i++){const ks=v.getUint32(k);if(ks<8||k+ks>de)break;keys.push(utf8(v,k+8,k+ks));k+=ks}
+        }
+        else if(t==='ilst')mp4Boxes(v,ds,de,(cc,is,ie)=>{
+            const idx=v.getUint32(is-4);   // for mdta this is a 1-based index into keys, else a fourcc
+            mp4Boxes(v,is,ie,(dt,ps,pe)=>{
+                if(dt!=='data')return;
+                const dtype=v.getUint32(ps);            // 1 = UTF-8, 0 = implicit
+                if(dtype!==1&&dtype!==0)return;
+                items.push({idx,cc,val:utf8(v,ps+8,pe)});   // 4 bytes type + 4 bytes locale
+            });
+        });
+    });
+    walk(s,e);
+    // Resolve each item to a key name: the mdta keys table if present, else the classic iTunes atom.
+    const NAMED={'\xA9cmt':'comment','\xA9nam':'title','desc':'description','\xA9des':'description'};
+    let text='';
+    for(const it of items){
+        const k=(keys.length&&it.idx>=1&&it.idx<=keys.length)?keys[it.idx-1]:NAMED[it.cc];
+        if(!k||!it.val||!it.val.trim())continue;
+        text+=(text?'\n':'')+it.val;
+    }
+    return {text,dim};
+}
+
+// EBML variable-size integer. IDs keep the marker bit (so they compare against the published
+// constants); data sizes strip it. Returns null on a malformed leading octet.
+function ebmlNum(b,o,keepMarker){
+    const first=b[o];
+    if(first===undefined)return null;
+    let len=1,mask=0x80;
+    while(len<=8&&!(first&mask)){len++;mask>>=1}
+    if(len>8||o+len>b.length)return null;
+    let val=keepMarker?first:(first&(mask-1));
+    let allOnes=(first&(mask-1))===(mask-1);
+    for(let i=1;i<len;i++){val=val*256+b[o+i];if(b[o+i]!==0xFF)allOnes=false}
+    return {val,len,unknown:!keepMarker&&allOnes};
+}
+
+// Walk the EBML children in a loaded buffer, calling fn(id, dataStart, dataEnd).
+function ebmlChildren(b,s,e,fn){
+    let o=s;
+    while(o<e){
+        const id=ebmlNum(b,o,true);if(!id)return;
+        const sz=ebmlNum(b,o+id.len,false);if(!sz)return;
+        const ds=o+id.len+sz.len,de=sz.unknown?e:ds+sz.val;
+        if(ds>e||de>e||de<ds)return;
+        fn(id.val,ds,de);
+        o=de;
+    }
+}
+
+async function readMatroskaMeta(f){
+    const rd=async(o,n)=>new Uint8Array(await f.slice(o,Math.min(o+n,f.size)).arrayBuffer());
+    let text='',dim=null;
+    // Find Segment, then step over its top-level children by size. Clusters are the entire payload,
+    // so they must be skipped by arithmetic and never read.
+    let o=0,segEnd=f.size;
+    const head=await rd(0,64);
+    let h=ebmlNum(head,0,true),hs=h&&ebmlNum(head,h.len,false);
+    if(h&&hs&&h.val===0x1A45DFA3)o=h.len+hs.len+hs.val;   // skip the EBML header element
+    const sh=await rd(o,64);
+    const sid=ebmlNum(sh,0,true),ssz=sid&&ebmlNum(sh,sid.len,false);
+    if(!sid||!ssz||sid.val!==0x18538067)return null;
+    o+=sid.len+ssz.len;
+    if(!ssz.unknown)segEnd=Math.min(f.size,o+ssz.val);
+    while(o<segEnd){
+        const hdr=await rd(o,16);
+        const id=ebmlNum(hdr,0,true);if(!id)break;
+        const sz=ebmlNum(hdr,id.len,false);if(!sz)break;
+        const ds=o+id.len+sz.len;
+        if(sz.unknown)break;                       // an unknown-size child can't be stepped over
+        const de=ds+sz.val;
+        if(de>f.size||de<=ds)break;
+        if(id.val===0x1254C367&&sz.val<MOOV_CAP){          // Tags
+            const b=await rd(ds,sz.val);
+            const walk=(s,e)=>ebmlChildren(b,s,e,(cid,cs,ce)=>{
+                if(cid===0x7373||cid===0x67C8){            // Tag / SimpleTag - SimpleTags may nest
+                    let name='',val='';
+                    ebmlChildren(b,cs,ce,(gid,gs,ge)=>{
+                        if(gid===0x45A3)name=new TextDecoder().decode(b.slice(gs,ge)).replace(/\0/g,'');
+                        else if(gid===0x4487)val=new TextDecoder().decode(b.slice(gs,ge)).replace(/\0/g,'');
+                    });
+                    // ffmpeg uppercases tag keys, so PROMPT/WORKFLOW - match loosely and keep the value.
+                    if(val&&val.trim())text+=(text?'\n':'')+val;
+                    walk(cs,ce);
+                }
+            });
+            walk(0,b.length);
+        } else if(id.val===0x1654AE6B&&sz.val<MOOV_CAP){   // Tracks
+            const b=await rd(ds,sz.val);
+            ebmlChildren(b,0,b.length,(tid,ts,te)=>{
+                if(tid!==0xAE)return;                      // TrackEntry
+                ebmlChildren(b,ts,te,(vid2,vs,ve)=>{
+                    if(vid2!==0xE0)return;                 // Video - only video tracks have one
+                    let w=0,hh=0;
+                    ebmlChildren(b,vs,ve,(pid,ps,pe)=>{
+                        let n=0;for(let i=ps;i<pe;i++)n=n*256+b[i];
+                        if(pid===0xB0)w=n;else if(pid===0xBA)hh=n;
+                    });
+                    if(w>0&&hh>0&&!dim)dim={w,h:hh};
+                });
+            });
+        }
+        o=de;
+    }
+    return (text||dim)?{text,dim}:null;
+}
+
+// Videos run to hundreds of MB. Never buffer the whole file - walk the container's header chain with
+// File.slice() and read only the box that matters. Signature deliberately differs from
+// readDims(buffer), which takes an already-loaded ArrayBuffer because images are small.
+async function readVideoMeta(f){
+    try{
+        const head=new Uint8Array(await f.slice(0,16).arrayBuffer());
+        if(head.length<12)return null;
+        if(head[0]===0x1A&&head[1]===0x45&&head[2]===0xDF&&head[3]===0xA3)return await readMatroskaMeta(f);
+        // ISOBMFF: step the top-level boxes looking for moov, which may sit at the front (faststart)
+        // or the very end. Only its header is read until we find it.
+        let o=0;
+        while(o+8<=f.size){
+            const hv=new DataView(await f.slice(o,o+16).arrayBuffer());
+            if(hv.byteLength<8)break;
+            let sz=hv.getUint32(0),hdr=8;const t=fcc(hv,4);
+            if(sz===1){if(hv.byteLength<16)break;sz=Number(hv.getBigUint64(8));hdr=16}
+            else if(sz===0)sz=f.size-o;
+            if(sz<hdr||o+sz>f.size)break;
+            if(t==='moov'){
+                if(sz>MOOV_CAP)return null;
+                const v=new DataView(await f.slice(o+hdr,o+sz).arrayBuffer());
+                const r=mp4Moov(v,0,v.byteLength);
+                return (r.text||r.dim)?r:null;
+            }
+            o+=sz;
+        }
+    }catch(e){}
+    return null;
+}
+
+// ComfyUI and VHS store the graph as a JSON *string* inside a wrapper object -
+// {"prompt":"{\"6\": {\"class_type\": ...}}"} - and the backslash escaping hides the `"class_type"`
+// markers parseMetadata() sniffs for. The inner strings must be unwrapped before the BRAIN sees them.
+// Returns {text} for a node graph, or {obj} for a flat settings dict (see parseSettings).
+function unwrapMeta(raw){
+    const t=(raw||'').trim();
+    if(!t)return{text:'',obj:null};
+    let o=null;try{o=JSON.parse(t)}catch(e){}
+    if(!o||typeof o!=='object'||Array.isArray(o))return{text:raw,obj:null};
+    let text='';
+    for(const [k,val] of Object.entries(o)){
+        const s=typeof val==='string'?val:(val&&typeof val==='object'?JSON.stringify(val):'');
+        if(s&&(s.includes('"class_type"')||s.includes('"nodes"')))text+=k+'\n'+s+'\n';
+    }
+    return text?{text,obj:null}:{text:raw,obj:o};
+}
+
+// Some generators (WanGP/DeepBeepMeep and similar wrappers) write a flat settings dict instead of a
+// node graph - same fields as A1111, different key names. Returns null if it isn't one.
+function parseSettings(o){
+    const pick=(...ks)=>{for(const k of ks){const v=o[k];if(v!==undefined&&v!==null&&v!=='')return v}return null};
+    const pos=pick('prompt','positive_prompt','positive');
+    if(typeof pos!=='string'||!pos.trim())return null;
+    const clean=s=>String(s).split(/[\\/]/).pop().replace(/\.(safetensors|ckpt|pth)$/i,"");
+    const meta={model:"?",size:"?",seed:"?",steps:"?",cfg:"?",sampler:"?"};
+    const mdl=pick('model_type','model','base_model_type','model_filename','checkpoint');
+    if(mdl)meta.model=clean(mdl);
+    const sz=pick('resolution','size');if(sz)meta.size=String(sz).replace(/\s+/g,'');
+    const sd=pick('seed');if(sd!=null)meta.seed=sd;
+    const st=pick('num_inference_steps','steps','sampling_steps');if(st!=null)meta.steps=st;
+    const cf=pick('guidance_scale','cfg_scale','cfg');if(cf!=null)meta.cfg=cf;
+    const sm=pick('sampler','sampler_name','sample_solver','scheduler');if(sm)meta.sampler=String(sm);
+    const resources=[],mult=String(pick('loras_multipliers')||'').split(/[\s,]+/).filter(Boolean);
+    const lr=pick('activated_loras','loras');
+    if(Array.isArray(lr))lr.forEach((l,i)=>{
+        const n=typeof l==='string'?l:(l&&(l.name||l.lora));
+        if(n)resources.push({type:'LoRA',name:clean(n),str:mult[i]||"1.0"});
+    });
+    return {pos:pos.trim(),neg:String(pick('negative_prompt','negative')||'').trim(),meta,resources};
+}
+
+// Did a parse actually recover anything? Drives the fall back to the "Video" placeholder.
+const hasMeta=m=>!!(m&&((m.pos&&m.pos.trim())||(m.neg&&m.neg.trim())||(m.meta&&m.meta.model&&m.meta.model!=="?"&&m.meta.model!=="")));
+
+// Present a video's container metadata as keyed chunks so the JSON viewer's outline and tabs work
+// exactly as they do for PNG tEXt chunks.
+function videoChunks(raw){
+    if(!raw||!raw.trim())return[];
+    let o=null;try{o=JSON.parse(raw)}catch(e){}
+    const out=[];
+    if(o&&typeof o==='object'&&!Array.isArray(o))
+        // Split only where a value is itself a JSON document (ComfyUI's prompt/workflow). A flat
+        // settings dict stays one chunk - sixty scalar tabs would be useless.
+        for(const [k,v] of Object.entries(o)){
+            if(typeof v!=='string')continue;
+            const s=v.trim();
+            if(s[0]==='{'||s[0]==='[')try{JSON.parse(s);out.push({keyword:k,text:s})}catch(e){}
+        }
+    if(!out.length)out.push({keyword:'metadata',text:raw});
+    out.forEach(c=>{try{c.json=JSON.parse(c.text)}catch(e){c.json=null}});
+    return out;
+}
+// =================== END VIDEO CONTAINER METADATA ===================
+
 // Chrome decodes .mp4/.webm reliably but not every container - Matroska (.mkv) in particular, and
 // .mov only when it holds codecs Chrome knows. Swap an unplayable <video> for a labelled tile so it
 // doesn't just render blank.
@@ -778,10 +1087,25 @@ function isAnimated(buffer){
     return false;
 }
 
-async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name);let m=null,dim=null;if(vid)m={meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b))}const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim};cache.set(p,i);dPut(i)}catch{}}
+async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name);let m=null,dim=null;
+    if(vid){
+        // Container walk only - readVideoMeta never buffers the file. The old "Video" placeholder
+        // stays as the failure path, so an unparseable container is no worse off than before.
+        const r=await readVideoMeta(f);
+        if(r&&r.text){const u=unwrapMeta(r.text);m=u.obj?parseSettings(u.obj):parseMetadata(u.text)}
+        if(!hasMeta(m))m={pos:"",neg:"",meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};
+        dim=dimStr(r&&r.dim);
+    }else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b))}
+    const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim};if(vid)i.vm=VMETA;
+    cache.set(p,i);dPut(i)}catch{}}
 // Entries cached by an older build have no `dim`. Backfilling reads only the file's first 64KB
 // rather than re-running the full metadata parse.
-async function backfillDim(h,p){const it=cache.get(p);if(!it||it.v||it.dim!==undefined)return;try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
+async function backfillDim(h,p){const it=cache.get(p);
+    // Videos cached before this parser existed hold only the "Video" placeholder. Re-run proc() for
+    // any whose stamp is behind VMETA, so parser improvements reach old entries without a DB bump.
+    if(it&&it.v){if(it.vm!==VMETA)await proc(h,p);return}
+    if(!it||it.dim!==undefined)return;
+    try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
 
 function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
 function toggleView(){setView(vMode==='grid'?'list':'grid')}
@@ -1539,11 +1863,11 @@ async function readTextChunks(buffer){
                 const len=v.getUint32(o),type=String.fromCharCode(...new Uint8Array(buffer,o+4,4));
                 if(o+8+len>v.byteLength)break;
                 const data=new Uint8Array(buffer,o+8,len);
-                if(type==='tEXt'||type==='iTXt'||type==='zTXt'){
+                if(type==='tEXt'||type==='iTXt'||type==='zTXt'||type==='comf'){
                     let z=0;while(z<data.length&&data[z]!==0)z++;
                     const kw=new TextDecoder('latin1').decode(data.slice(0,z));
                     let txt='';
-                    if(type==='tEXt')txt=new TextDecoder('utf-8',{fatal:false}).decode(data.slice(z+1));
+                    if(type==='tEXt'||type==='comf')txt=new TextDecoder('utf-8',{fatal:false}).decode(data.slice(z+1));
                     else if(type==='zTXt')txt=(await decompressZlib(data.slice(z+2)))||'';
                     else{   // iTXt: keyword \0 compressedFlag compressionMethod langTag \0 translatedKeyword \0 text
                         let p=z+1;const cflag=data[p];p+=2;
@@ -1567,9 +1891,15 @@ async function readTextChunks(buffer){
 
 async function viewJSON(){
     if(!cItem){showToast('Open an image first.','info');return}
-    if((cache.get(cItem.p)||{}).v||RX_VIDEO.test(cItem.h.name)){showToast('Videos carry no embedded workflow.','info');return}
     try{
-        const chunks=await readTextChunks(await (await cItem.h.getFile()).arrayBuffer());
+        const f=await cItem.h.getFile();
+        let chunks;
+        if((cache.get(cItem.p)||{}).v||RX_VIDEO.test(cItem.h.name)){
+            // Videos take the container walk, not arrayBuffer() - the file may be hundreds of MB.
+            const r=await readVideoMeta(f);
+            chunks=videoChunks(r&&r.text);
+            if(!chunks.length){showToast('No embedded metadata in this video.','info');return}
+        }else chunks=await readTextChunks(await f.arrayBuffer());
         if(!chunks.length){showToast('No embedded metadata in this file.','info');return}
         jsonChunks=chunks;
         const firstJson=chunks.findIndex(c=>c.json);

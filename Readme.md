@@ -1,4 +1,4 @@
-# History Guru 🧘‍♂️ v4.4.0 (ChromeEdge Edition)
+# History Guru 🧘‍♂️ v4.5.0 (ChromeEdge Edition)
 
 > **The 100% Offline, Single-File File Manager & Metadata Viewer for AI Images.**
 
@@ -54,10 +54,18 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   **Scales to 10,000+ Images:** Page-based rendering (100/200/500/1000/All) keeps the DOM light, while thumbnails only decode once they scroll into view.
 *   **Measured Performance:** 10,000 items render in ~60ms with only the visible thumbnails ever opened.
 
-### 🎬 Expanded Format Support
+### 🎬 Video Metadata Extraction
+*   **Prompts & Workflows From Video:** MP4/MOV metadata is read straight out of the container (`moov/udta/meta/ilst`, both the classic `©cmt` atom and the `mdta` keys table), and WebM/MKV out of the Matroska `Tags` element. Positive and negative prompts, model, seed, steps, CFG, sampler and LoRAs now populate for video exactly as they do for images.
+*   **Two Generator Formats:** ComfyUI/VideoHelperSuite node graphs *and* flat settings dictionaries from wrappers like WanGP, which use their own key names (`negative_prompt`, `num_inference_steps`, `guidance_scale`, `activated_loras`).
+*   **True Resolution:** Read from the container's own `tkhd` box (or Matroska `PixelWidth`/`PixelHeight`), so the Size field shows `1024x1536` instead of `8.7MB`. Audio tracks are skipped automatically.
+*   **Streams, Never Buffers:** Hundreds-of-megabytes files are walked by slicing the box chain — only the metadata box is ever read, so scanning a video library stays as fast as scanning images.
+*   **Workflow Viewer for Video:** The JSON viewer now opens on videos, with the full clickable node outline, syntax highlighting and search.
+*   **Graceful Fallback:** Videos with no AI metadata (or an unreadable container) keep the old `Video` placeholder — but still show their real resolution.
+
+### 🖼️ Expanded Format Support
 *   Added **GIF**, **MOV**, and **MKV** alongside PNG/JPEG/WebP and MP4/WebM. Unplayable video containers fall back to a labelled placeholder tile instead of a blank thumbnail.
-*   **Safer "Fix & Save":** Animated GIF/WebP now prompt before flattening to a single frame, and non-image files are rejected before anything is written.
-*   **Video metadata — not yet supported:** Videos are listed, played, and managed, but their metadata is not parsed — no prompts, workflow, or true resolution, just a `Video` placeholder and the file size. Sample ComfyUI video files are needed before this can be built and verified.
+*   **Animated PNG & WebP:** ComfyUI's `SaveAnimatedPNG` (`comf` chunks) and `SaveAnimatedWEBP` (EXIF tags) metadata is now extracted.
+*   **Safer "Fix & Save":** Animated GIF/WebP now prompt before flattening to a single frame, and non-image files are rejected before anything is written. Metadata editing stays images-only — rewriting a video container would corrupt it.
 
 ---
 
@@ -91,6 +99,7 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   **IndexedDB Caching:** Instant subsequent loads for thousands of images.
 *   **Virtual Scrolling & Pagination:** Near-zero lag when browsing massive collections, with lazy-loaded thumbnails.
 *   **CRC32 Binary Injection:** Patches PNG chunks without re-encoding pixel data.
+*   **Container Walkers:** Hand-rolled ISOBMFF (MP4/MOV) and EBML (WebM/MKV) readers that slice only the metadata boxes, so a 200MB video costs a few KB of reads.
 *   **Staged SHA-256 Hashing:** Size bucket → partial hash → full hash, so duplicate scans stay cheap at scale.
 
 ---
@@ -101,6 +110,14 @@ MIT License - Free to use, modify, and distribute for the AI art community.
 ---
 
 ## 🚀 Version History
+
+### [4.5.0] - 2026-07-26
+- **Video Metadata**: MP4/MOV/WebM/MKV metadata is now read from the container and parsed — prompts, model, seed, steps, CFG, sampler and LoRAs, plus true resolution from `tkhd`/`PixelWidth`. Supports ComfyUI/VHS node graphs and flat settings dicts (WanGP). Files are sliced, never buffered.
+- **JSON Viewer Opens on Video**: Replaced the "Videos carry no embedded workflow" message with the real workflow viewer, node outline included.
+- **Animated PNG / WebP**: ComfyUI `SaveAnimatedPNG` (`comf` chunks) and `SaveAnimatedWEBP` (EXIF tags) metadata now extracted.
+- **Fixed — prompts were wrong on images too**: The negative prompt duplicated the positive one on many workflows. Three causes: output slot indices were ignored when following conditioning links, `inputs.text` was collected twice, and `ConditioningZeroOut` (how Flux/Chroma graphs make an empty negative) echoed the positive prompt back. Negatives now read correctly — an empty negative on a Flux workflow is the right answer.
+- **Fixed — Seed and Model on images**: Seed showed a raw node reference (`["182",0]`) when it came from a Seed/Primitive node, and Model was blank whenever the model port ran through a switch or reroute node. Both now resolve; all bundled samples report real values.
+- **Cached videos upgrade in place** via a metadata version stamp, without discarding the image cache.
 
 ### [4.4.0] - 2026-07-26
 - **Advanced Search**: The search box now parses a real query language — AND/OR/NOT, `-exclusions`, `"phrases"`, `( )` grouping, and `field:value` terms across name, path, prompts, model, sampler, seed, steps, cfg, size, and LoRAs.
