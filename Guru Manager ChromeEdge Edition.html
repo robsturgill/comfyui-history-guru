@@ -708,10 +708,32 @@ function parseComfy(json) {
         return t;
     };
 
-    const findUpstreamModel=(l,d=0)=>{if(d>10||!l||!Array.isArray(l))return"";let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model)return findUpstreamModel(inputs.model,d+1);return""};
+    // Inputs that carry something other than a model, so the generic walk below never follows them.
+    const notModel=/clip|vae|image|latent|mask|cond|positive|negative|text|prompt|guider|sigmas|seed/;
+    const findUpstreamModel=(l,d=0,seen)=>{if(d>10||!l||!Array.isArray(l))return"";seen=seen||new Set();let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){if(seen.has(l[0]))return"";seen.add(l[0]);n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model){const r=findUpstreamModel(inputs.model,d+1,seen);if(r)return r}
+        // Passthrough/switch/reroute nodes name their model port anything (on_true, input, any_01),
+        // so fall back to following every node reference that isn't obviously another data type.
+        for(const k in inputs){if(k==='model'||notModel.test(k))continue;const v=inputs[k];if(Array.isArray(v)&&v.length&&(typeof v[0]==='string'||typeof v[0]==='number')){const r=findUpstreamModel(v,d+1,seen);if(r)return r}}
+        return""};
+    // width/height are frequently node references (e.g. ["49",0]) rather than literals, and so is
+    // seed (a Seed/Primitive node). Resolve them, and never emit a non-numeric value - interpolating
+    // the raw array produced sizes like "49,0x49,1". `keys` names the inputs to read off a referenced
+    // node; width/height omit it and pick by output slot instead.
+    const resolveNum=(val,d=0,keys=null)=>{
+        if(typeof val==='number')return val;
+        if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
+        if(Array.isArray(val)&&val.length&&d<8){
+            const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
+            const inp=n.inputs||{},ks=keys||[val[1]===1?'height':'width'];
+            for(const k of ks)if(typeof inp[k]==='number')return inp[k];
+            if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
+            for(const k of ks.concat(['value','number','int'])){const r=resolveNum(inp[k],d+1,keys);if(r!=null)return r}
+        }
+        return null;
+    };
     const samplerTypes = ["KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerEulerAncestralCFGPP", "SamplerLCM"];
     const ksampler=nodes.find(n=>n.class_type&&samplerTypes.some(type=>n.class_type.includes(type)));
-    if(ksampler){const inputs=ksampler.inputs||{};meta.seed=inputs.seed||inputs.noise_seed||"?";meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
+    if(ksampler){const inputs=ksampler.inputs||{};const sv=inputs.seed!==undefined?inputs.seed:inputs.noise_seed;let sr=resolveNum(inputs.seed,0,['seed','noise_seed']);if(sr==null)sr=resolveNum(inputs.noise_seed,0,['seed','noise_seed']);meta.seed=sr!=null?sr:(Array.isArray(sv)?"?":(sv||"?"));meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
     
     nodes.forEach(n=>{
         const nodeType = n.class_type || "";
@@ -723,20 +745,6 @@ function parseComfy(json) {
         if(nodeType.includes("IPAdapter") && inputs.ipadapter_file) resources.push({type:'IP-Adapter', name:inputs.ipadapter_file, str:inputs.weight || "1.0"});
     });
     const sizeNodes = ["EmptyLatentImage", "LatentUpscale", "LatentComposite", "EmptySD3LatentImage"];
-    // width/height are frequently node references (e.g. ["49",0]) rather than literals. Resolve them,
-    // and never emit a non-numeric value - interpolating the raw array produced sizes like "49,0x49,1".
-    const resolveNum=(val,d=0)=>{
-        if(typeof val==='number')return val;
-        if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
-        if(Array.isArray(val)&&val.length&&d<8){
-            const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
-            const inp=n.inputs||{},slot=val[1]===1?'height':'width';
-            if(typeof inp[slot]==='number')return inp[slot];
-            if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
-            for(const k of [slot,'value','number','int']){const r=resolveNum(inp[k],d+1);if(r!=null)return r}
-        }
-        return null;
-    };
     const sizeNode=nodes.find(n=>sizeNodes.includes(n.class_type));
     if(sizeNode){const inputs=sizeNode.inputs||{};const wv=resolveNum(inputs.width),hv=resolveNum(inputs.height);if(wv>0&&hv>0)meta.size=`${Math.round(wv)}x${Math.round(hv)}`}
     return {pos,neg,meta,resources};
