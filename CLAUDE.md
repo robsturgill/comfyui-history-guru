@@ -10,7 +10,7 @@ would normally warrant a new module, add a clearly commented section instead.
 | | |
 |---|---|
 | App file | [Guru Manager ChromeEdge Edition.html](Guru%20Manager%20ChromeEdge%20Edition.html) (~1275 lines) |
-| Test data | `samples/` — folder1, folder2, folder3 |
+| Test data | `samples/` — folder1, folder2, folder3, video |
 | Test data backup | `samples -backup/` — **never modify, never open in the app.** Restore `samples/` from here after destructive tests |
 | Runtime | Chrome / Edge only (File System Access API). Runs from `file://` |
 
@@ -38,6 +38,19 @@ duplicates view), then `rTree(); buildModelFilter(); syncSortUI(); await opD(nul
 the search parser end-to-end. Note `dReg` needs `''` mapped to a root stub, and each folder handle
 needs a `removeEntry` if you touch delete paths.
 
+**Testing the video path without the picker.** The parsers are pure and run fine in Node: extract the
+`<script>` block, brace-match out `parseMetadata`/`parseComfy`/`readVideoMeta`/etc., and call them
+directly — Node's `File`/`Blob` give the same `slice()`/`arrayBuffer()` contract Chrome does, so
+`readVideoMeta(new File([buf], name))` works unchanged. Note a naive brace-matcher **fails** on
+`parseMetadata`, which contains `indexOf('{')` and `'}'` as string data; skip string/comment/regex
+spans.
+
+To drive the *real UI* on real video metadata, rebuild each sample as `ftyp` + a 16-byte stub `mdat`
++ its genuine `moov`. That drops an 8.8MB file to ~9KB — small enough to base64 into a seeded page —
+while keeping the metadata byte-identical. The video won't decode (so `vidFallback()` fires), but
+every metadata path is exercised. The preview pane only executes files **inside the project folder**,
+so write the harness there and delete it afterwards.
+
 `samples/` is deliberately arranged to cover every duplicate case:
 
 | Content | Files | Case exercised |
@@ -47,7 +60,19 @@ needs a `removeEntry` if you touch delete paths.
 | C | `folder1/t2i_2026_07_21_00019_.png`, `folder1/t2i_2026_07_21_00019_ - Copy.png` | same folder |
 | unique | `..._00014_`, `..._00017_`, `..._00018_` | must NOT be grouped |
 
-Expected result: **3 groups, 7 files**.
+Expected result: **3 groups, 7 files**. `samples/video/` does not affect this — all four videos have
+distinct byte sizes, so they are dropped at stage 1 of the duplicate scan.
+
+`samples/video/` covers the three `©cmt` shapes described in [Video metadata](#video-metadata):
+
+| File | Writer | Exercises |
+|---|---|---|
+| `2026-07-23.mp4`, `2026-07-24.mp4` | ComfyUI VHS `VideoCombine` | escaped-graph unwrap, WAN two-sampler graph, 2 LoRAs, `1024x1536` from `tkhd` |
+| `2026-07-23-00h47m40s_…giraffe speaks.mp4` | WanGP / LTX-2 | flat settings dict → `parseSettings`, `activated_loras`, `960x960` (note its `resolution` field claims `1280x704` — the container wins) |
+| `grok-video-….mp4` | Grok | **no** AI metadata (`Signature:` + a `covr` JPEG); must degrade to the `Video` placeholder while still showing `416x736` |
+
+Two files have an audio track, so their second `tkhd` reads `0x0` — that is the case the `w > 0`
+filter exists for.
 
 ---
 
@@ -127,12 +152,10 @@ listed but never classified (or classified but never listed).
 - Images: `png` `jpg` `jpeg` `webp` `gif`
 - Video: `mp4` `webm` `mov` `mkv`
 
-Videos skip metadata parsing entirely — `proc()` sets `model:"Video"` and puts the **file size in MB**
-into `meta.size`, and `dim` stays null. So prompts, workflow and true resolution never appear for
-video; this is a gap, not a bug in the parser. `docs/VIDEO-METADATA.md` has the research and an
-implementation proposal (`docs/` is gitignored, so that file is local-only). Chrome cannot decode every container (`.mkv` in particular),
-so `vidFallback()` swaps an errored `<video>` for a labelled 🎬 tile rather than leaving it blank.
-It must be attached **after** the element is in the DOM — it replaces the node via `parentNode`.
+Videos are parsed by `readVideoMeta()` — see [Video metadata](#video-metadata) below. Chrome cannot
+decode every container (`.mkv` in particular), so `vidFallback()` swaps an errored `<video>` for a
+labelled 🎬 tile rather than leaving it blank. It must be attached **after** the element is in the
+DOM — it replaces the node via `parentNode`.
 
 ### `fixSave()` is images-only
 
@@ -146,6 +169,83 @@ then **deletes the original**. Three guards protect that path:
    flattening, because conversion keeps one frame and removes the original.
 
 The image load now races `onload`/`onerror`/timeout, so no failure mode can hang it.
+
+### Video metadata
+
+`readVideoMeta(file)` walks the container and returns `{text, dim}`. It takes a **`File`, not an
+ArrayBuffer** — the signature differs from `readDims(buffer)` on purpose. Videos run to hundreds of
+MB; the reader slices the box/element chain and only ever fully reads `moov` (MP4) or `Tags`/`Tracks`
+(Matroska), capped by `MOOV_CAP`. **Never change this to `f.arrayBuffer()`** — that would pull entire
+videos into memory per item and undo the pagination/lazy-load work.
+
+Dimensions come from `tkhd` (last 8 bytes of the box, so no version branch) or Matroska
+`PixelWidth`/`PixelHeight`. Tracks with `w == 0` are audio — skip them. Verified against all four
+samples: `tkhd` matched the `stsd` coded size exactly, with identity matrices.
+
+**Where the metadata actually lives — verified, and it is *not* what the research doc predicted.**
+All four samples use the classic iTunes `©cmt` atom under `moov/udta/meta/ilst`, **not** the `mdta`
+keys/ilst mechanism. Both are supported (`mdta` resolves the 1-based index into the `keys` table;
+otherwise the fourcc maps through `NAMED`), but `©cmt` is what real files carry.
+
+The payload is a **wrapper object**, and the graph inside it is a *JSON string*, not an object:
+
+```
+©cmt = {"prompt": "{\"6\": {\"class_type\": \"CLIPTextEncode\", ...}}"}
+```
+
+That escaping is why the raw text can't go straight to `parseMetadata()`: its sniff looks for the
+literal `"class_type"`, and in the escaped form the character after `class_type` is `\`, not `"`, so
+it never matches and the file silently parses as nothing. `unwrapMeta()` exists solely to pull the
+inner strings out. It returns `{text}` for a node graph or `{obj}` for a flat settings dict.
+
+Three shapes show up in practice, and all three are covered:
+
+| Sample | `©cmt` shape | Handled by |
+|---|---|---|
+| ComfyUI VHS `VideoCombine` | `{"prompt":"<escaped graph>"}` — note **no `workflow` key**, matching [VHS #486](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite/issues/486) | `unwrapMeta` → `parseMetadata` → `parseComfy` |
+| WanGP / DeepBeepMeep | flat settings dict: `prompt`, `negative_prompt`, `resolution`, `seed`, `num_inference_steps`, `guidance_scale`, `activated_loras`, `model_type` | `unwrapMeta` → `parseSettings` |
+| Grok video | `Signature: <base64>` — not AI metadata at all | falls through to the `Video` placeholder, but still gets `dim` |
+
+`hasMeta()` decides whether a parse recovered anything; if not, `proc()` keeps the **old placeholder**
+(`model:"Video"`, `meta.size` = file size in MB). That fallback is deliberate — an unparseable
+container is no worse off than before. Note `meta.size` still doubles as a filesize string *only* on
+that path; when metadata parses, `dim` supplies the resolution.
+
+Cached videos carry a `vm` stamp. `backfillDim()` re-runs `proc()` for any video whose `vm !== VMETA`,
+so **bump `VMETA` when the video parser changes** rather than bumping `DB` — the latter would discard
+every image's cached metadata too.
+
+`fixSave()` stays images-only. Rewriting a `moov` means recomputing every `stco`/`co64` offset in the
+file; there is no safe hand-rolled version of that.
+
+### Non-obvious parser fixes that videos exposed
+
+Three bugs in `findUpstreamText()` were found via the video samples but affected **images equally** —
+don't "simplify" them back out:
+
+1. **Output slots were ignored.** `["50",0]` and `["50",1]` both resolved to node 50 and then
+   collected *both* its `positive` and `negative` upstreams, so the negative prompt got spliced onto
+   the positive one and both fields came out identical. When a node has both inputs, the slot index
+   now picks one.
+2. **`inputs.text` was added twice** — step 2 adds it, then step 3's generic sweep re-matched it via
+   `key.includes('text')`, concatenated with no separator. A `used` set now guards it.
+3. **`ConditioningZeroOut` echoed the positive prompt.** Flux/Chroma graphs wire the *positive*
+   encoder into it to synthesise an empty negative, so recursing through it reported the positive
+   text as the negative. It now returns `""`. This is why the PNG samples correctly show an empty
+   negative — that is right, not a regression.
+
+### Animated PNG and WebP
+
+`comf` is ComfyUI `SaveAnimatedPNG`'s chunk type (written after IDAT). Its payload is the exact
+`tEXt` shape — `keyword \0 json` — so both `extractText()` and `readTextChunks()` treat it as `tEXt`.
+
+`extractWebPExif()` reads the RIFF `EXIF` chunk → TIFF IFD0 → ASCII tags, stripping the `prompt:` /
+`workflow:` prefix ComfyUI writes (tag `0x0110` = prompt, `0x010F` = workflow, further keys walking
+downwards). It returns `""` when absent so the caller falls back to the previous behaviour — which
+was decoding the whole file as text and hoping.
+
+Neither had a real sample. Both were verified against synthesized files built from the ComfyUI
+writer's own layout; a genuine `SaveAnimatedPNG` / `SaveAnimatedWEBP` output would be worth a recheck.
 
 ### Image dimensions come from the file, never the workflow
 
@@ -209,9 +309,14 @@ Thin IndexedDB wrappers. Schema version is **1**; adding fields to a cache item 
 walk that populates `fReg`/`dReg` and calls `proc()` for uncached files.
 
 ### Metadata parsing ("the BRAIN") — lines 324–521
-PNG chunk walking (`tEXt`/`iTXt`/`zTXt`/`eXIf`), JPEG EXIF UserComment, then
-`parseMetadata()` → `parseComfy()` (workflow graph traversal, LoRA extraction) or `parseA1111()`.
-Self-contained and independent of everything below it.
+PNG chunk walking (`tEXt`/`iTXt`/`zTXt`/`eXIf`/`comf`), JPEG EXIF UserComment, WebP RIFF EXIF
+(`extractWebPExif`), then `parseMetadata()` → `parseComfy()` (workflow graph traversal, LoRA
+extraction) or `parseA1111()`. Self-contained and independent of everything below it.
+
+### Video container metadata — grep `// ===================== VIDEO CONTAINER METADATA`
+`readVideoMeta()` (ISOBMFF + EBML walkers), `unwrapMeta()`, `parseSettings()`, `hasMeta()`,
+`videoChunks()`. Sits next to `readDims()`/`dimStr` and feeds the same BRAIN — see
+[Video metadata](#video-metadata).
 
 ### Views — lines 526–534, 891–991
 `setView(mode)` sets `vMode` + button active states, then calls `rend()`.
