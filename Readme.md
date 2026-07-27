@@ -116,6 +116,7 @@ MIT License - Free to use, modify, and distribute for the AI art community.
 - **JSON Viewer Opens on Video**: Replaced the "Videos carry no embedded workflow" message with the real workflow viewer, node outline included.
 - **Animated PNG / WebP**: ComfyUI `SaveAnimatedPNG` (`comf` chunks) and `SaveAnimatedWEBP` (EXIF tags) metadata now extracted.
 - **Fixed — prompts were wrong on images too**: The negative prompt duplicated the positive one on many workflows. Three causes: output slot indices were ignored when following conditioning links, `inputs.text` was collected twice, and `ConditioningZeroOut` (how Flux/Chroma graphs make an empty negative) echoed the positive prompt back. Negatives now read correctly — an empty negative on a Flux workflow is the right answer.
+- **Fixed — Seed and Model on images**: Seed showed a raw node reference (`["182",0]`) when it came from a Seed/Primitive node, and Model was blank whenever the model port ran through a switch or reroute node. Both now resolve; all bundled samples report real values.
 - **Cached videos upgrade in place** via a metadata version stamp, without discarding the image cache.
 
 ### [4.4.0] - 2026-07-26
