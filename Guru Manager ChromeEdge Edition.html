@@ -4,8 +4,8 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>History Guru ChromeEdge Edition</title>
 <style>
-    :root{--bg:#09090b;--head:rgba(9,9,11,0.98);--side:#0c0c0e;--card:#18181b;--bd:#27272a;--acc:#8b5cf6;--txt:#e4e4e7;--mut:#a1a1aa;--chip-bg:rgba(139,92,246,0.15);--chip-txt:#c4b5fd;--badge-bg:rgba(0,0,0,0.3);--thumb-size:224px;--sel-bg:rgba(139,92,246,0.25);--sb-track:rgba(255,255,255,0.04);--sb-thumb:#3f3f46;--sb-thumb-hov:#5b5b66}
-    [data-theme="light"]{--bg:#f8f9fa;--head:#ffffff;--side:#f1f3f4;--card:#ffffff;--bd:#dadce0;--acc:#7c3aed;--txt:#202124;--mut:#5f6368;--chip-bg:rgba(124,58,237,0.1);--chip-txt:#6d28d9;--badge-bg:rgba(0,0,0,0.05);--sel-bg:rgba(124,58,237,0.15);--sb-track:rgba(0,0,0,0.04);--sb-thumb:#c4c7c5;--sb-thumb-hov:#9aa0a6}
+    :root{--bg:#09090b;--head:rgba(9,9,11,0.98);--side:#0c0c0e;--card:#18181b;--bd:#27272a;--acc:#8b5cf6;--txt:#e4e4e7;--mut:#a1a1aa;--chip-bg:rgba(139,92,246,0.15);--chip-txt:#c4b5fd;--badge-bg:rgba(0,0,0,0.3);--thumb-size:224px;--sel-bg:rgba(139,92,246,0.25);--sb-track:rgba(255,255,255,0.04);--sb-thumb:#3f3f46;--sb-thumb-hov:#5b5b66;--ai-ok:#4ade80;--ai-warn:#fbbf24;--ai-bad:#ef4444;--ai-chip:rgba(139,92,246,.15)}
+    [data-theme="light"]{--bg:#f8f9fa;--head:#ffffff;--side:#f1f3f4;--card:#ffffff;--bd:#dadce0;--acc:#7c3aed;--txt:#202124;--mut:#5f6368;--chip-bg:rgba(124,58,237,0.1);--chip-txt:#6d28d9;--badge-bg:rgba(0,0,0,0.05);--sel-bg:rgba(124,58,237,0.15);--sb-track:rgba(0,0,0,0.04);--sb-thumb:#c4c7c5;--sb-thumb-hov:#9aa0a6;--ai-ok:#15803d;--ai-warn:#b45309;--ai-bad:#dc2626;--ai-chip:rgba(124,58,237,0.1)}
     /* Themed scrollbars. Firefox gets the two-value shorthand, Chromium the ::-webkit- pseudos. */
     *{scrollbar-width:thin;scrollbar-color:var(--sb-thumb) var(--sb-track)}
     ::-webkit-scrollbar{width:11px;height:11px}
@@ -198,6 +198,34 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
 .json-code mark.jm.cur{background:#fbbf24;color:#000}
 .json-empty{padding:20px 14px;color:var(--mut);font-size:0.78rem;line-height:1.5}
 .detail-media.vid-fallback{width:320px;height:200px;font-size:0.8rem;border-radius:12px}
+/* Dimmed, not disabled - the click must still land so the panel can explain why AI is unavailable. */
+.ai-off{opacity:.45}
+/* --- AI:CSS --- */
+/* Every colour here is a var, so light mode follows automatically. No literal hex below. */
+.ai-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.ai-grid>div{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
+.ai-dim{color:var(--mut);font-size:0.78rem}
+.ai-chip{display:inline-block;background:var(--ai-chip);color:var(--chip-txt);border-radius:6px;padding:2px 8px;font-size:0.78rem;margin-top:3px}
+.ai-models{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.ai-row{display:flex;align-items:center;gap:10px;font-size:0.8rem;background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:5px 10px}
+.ai-row>span:first-child{min-width:96px;color:var(--mut)}
+.ai-row>.ai-dim{margin-left:auto}
+.ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.dup-btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.ai-warn-box{background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--ai-warn);border-radius:8px;padding:14px 16px;font-size:0.86rem;line-height:1.55}
+.ai-warn-box pre{background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;margin:8px 0;overflow-x:auto}
+/* Faces view. .faces-view itself must stay padding-free like .dup-view - padding on the scroller
+   insets the sticky containing block and parks .dup-bar below the top of the scroll area. */
+.faces-view{margin:0;padding:0}
+.faces-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:20px}
+.face-card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.face-crops{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.face-crop{width:100%;aspect-ratio:1;border-radius:6px;background:var(--bg);object-fit:cover}
+.face-name{background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;padding:5px 8px;font-size:0.85rem;font-weight:600;outline:none;width:100%}
+.face-name:focus{border-color:var(--acc)}
+.face-acts{display:flex;gap:5px;flex-wrap:wrap}
+.face-acts .dup-btn{font-size:0.72rem;padding:3px 7px}
+/* --- /AI:CSS --- */
 </style>
 </head>
 <body class="mode-list" data-theme="dark">
@@ -243,6 +271,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
     <button id="themeToggle" class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">🌙</button>
     <button id="helpBtn" class="btn-icon" onclick="showHelp()" title="Help & Shortcuts">❓</button>
     <button id="dupBtn" class="btn-icon" onclick="findDuplicates()" title="Find Duplicates">🔍</button>
+    <button id="aiBtn" class="btn-icon" onclick="toggleAI()" title="AI Search">🧠</button>
     <button id="favFilterBtn" class="btn-icon" onclick="toggleFavoritesFilter()" title="Show Only Favorites">⭐</button>
 </header>
 <div class="layout">
@@ -265,6 +294,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
                     <option value="created">Date Created</option>
                     <option value="name">Name</option>
                     <option value="model">Model</option>
+                    <option value="relevance">Relevance</option>
                 </select>
                 <button id="sortDirBtn" class="tb-dir" onclick="toggleSortDir()" title="Toggle ascending / descending">↓</button>
             </div>
@@ -355,6 +385,15 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
             <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt);" onclick="hideHelp()">✕</button>
         </div>
         <div id="helpContent"></div>
+    </div>
+</div>
+<div id="aiOverlay" class="overlay hidden">
+    <div style="background:var(--side);border:1px solid var(--bd);border-radius:12px;padding:26px;max-width:720px;width:90%;max-height:85vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <h2 style="color:var(--acc);margin:0;font-size:1.1rem;">🧠 AI Search</h2>
+            <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt);" onclick="hideAI()">✕</button>
+        </div>
+        <div id="aiBody"></div>
     </div>
 </div>
 
@@ -464,11 +503,17 @@ function syncLorasFromPrompt() {
 const iDB=()=>new Promise((r,j)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains("i"))e.target.result.createObjectStore("i",{keyPath:"p"})};q.onsuccess=e=>{db=e.target.result;r()};q.onerror=j});
 const dPut=i=>new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").put(i);t.oncomplete=r});
 const dDel=k=>new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").delete(k);t.oncomplete=r});
-const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectStore("i").getAll().onsuccess=e=>{e.target.result.forEach(x=>cache.set(x.p,x));r()}});
+// One transaction for the whole array - a per-item dPut over a 10k-item analysis run is 10k transactions.
+const dPutMany=a=>new Promise(r=>{const t=db.transaction("i","readwrite"),s=t.objectStore("i");for(const i of a)s.put(i);t.oncomplete=r});
+// Keys starting '_' are reserved app-level records (the '__ai__' sentinel), not cache entries - they
+// share store "i" so the schema stays at version 1, so they have to be split back out here. The
+// extra no-'.' test is what makes this safe: every cache key is a path ending in a media extension,
+// so a real folder named '_archive' can never be mistaken for a reserved record and dropped.
+const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectStore("i").getAll().onsuccess=e=>{e.target.result.forEach(x=>{if(typeof x.p==='string'&&x.p[0]==='_'&&!x.p.includes('.'))aiLoadMeta(x);else cache.set(x.p,x)});r()}});
 
 // FS
 async function initFileSystem(){try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
-async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
+async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);aiInvalidateMat();await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
 // NOTE: opD's filter is `!h || parentOf(file)===p`. Passing rH restricts the list to loose files
 // sitting directly in the root, so a library kept in subfolders renders empty. null = "All Files",
 // matching what the sidebar's All Files entry (which rTree marks active) already does.
@@ -806,6 +851,9 @@ const dimStr=d=>d&&d.w&&d.h?`${d.w}x${d.h}`:null;
 // Bump when the video parser changes shape - cached video items stamped with an older VMETA get
 // re-read on the next scan (see backfillDim), so improvements land without nuking the whole DB.
 const VMETA=1;
+// Same idea as VMETA, for the AI side: bump when a model, its quantization or the preprocessing
+// changes, so aiNeeds() re-analyzes stale items without discarding any parsed metadata.
+const AIV=1;
 const MOOV_CAP=32*1024*1024;   // a moov this large is a broken file, not a workflow worth reading
 const fcc=(v,o)=>String.fromCharCode(v.getUint8(o),v.getUint8(o+1),v.getUint8(o+2),v.getUint8(o+3));
 const utf8=(v,s,e)=>new TextDecoder('utf-8',{fatal:false}).decode(new Uint8Array(v.buffer,v.byteOffset+s,e-s));
@@ -1107,7 +1155,7 @@ async function backfillDim(h,p){const it=cache.get(p);
     if(!it||it.dim!==undefined)return;
     try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
 
-function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
+function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const aiB=document.getElementById('aiBtn');if(aiB)aiB.classList.toggle('active',m==='faces');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
 function toggleView(){setView(vMode==='grid'?'list':'grid')}
 function toggleStats(){setView(vMode==='stats'?'list':'stats')}
 function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);const dispSize=item.dim||meta.size;if(dispSize&&dispSize!=="?")stats.sizes.set(dispSize,(stats.sizes.get(dispSize)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
@@ -1393,7 +1441,7 @@ async function deleteMarkedDuplicates(){
             const parentPath=f.path.includes('/')?f.path.substring(0,f.path.lastIndexOf('/')):"";
             const parentHandle=parentPath?(dReg.get(parentPath)||rH):rH;
             await parentHandle.removeEntry(name);
-            fReg.delete(f.path);cache.delete(f.path);await dDel(f.path);
+            fReg.delete(f.path);cache.delete(f.path);aiInvalidateMat();await dDel(f.path);
             selectedItems.delete(f.path);favorites.delete(f.path);
             f.deleted=true;ok++
         }catch(e){console.error('Failed to delete duplicate',f.path,e);fail++}
@@ -1411,13 +1459,18 @@ async function deleteMarkedDuplicates(){
 let contextTarget=null,contextPath="",contextIsFile=false;
 function showContextMenu(e,element,path,isFile=false){e.preventDefault();contextTarget=element;contextPath=path;contextIsFile=isFile;const menu=document.getElementById('contextMenu');menu.style.display='block';menu.style.left=e.pageX+'px';menu.style.top=e.pageY+'px';document.addEventListener('click',hideContextMenu,{once:true})}
 function hideContextMenu(){document.getElementById('contextMenu').style.display='none';contextTarget=null;contextPath="";contextIsFile=false}
-async function contextDelete(){if(!contextPath)return;const name=contextPath.split('/').pop();if(!confirm(`Delete "${name}"? This cannot be undone.`))return;try{if(contextIsFile){const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);fReg.delete(contextPath);cache.delete(contextPath);await dDel(contextPath)}else{const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);dReg.delete(contextPath)}await fullScan();showToast('Deleted successfully','success')}catch(e){showToast('Delete failed: '+e.message,'error')}hideContextMenu()}
-function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code>.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
+async function contextDelete(){if(!contextPath)return;const name=contextPath.split('/').pop();if(!confirm(`Delete "${name}"? This cannot be undone.`))return;try{if(contextIsFile){const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);fReg.delete(contextPath);cache.delete(contextPath);aiInvalidateMat();await dDel(contextPath)}else{const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);dReg.delete(contextPath)}await fullScan();showToast('Deleted successfully','success')}catch(e){showToast('Delete failed: '+e.message,'error')}hideContextMenu()}
+function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
-async function opD(h,p){cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;if(!passModel(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
+async function opD(h,p){
+    // opD never assigns .s, so a relevance sort left over from a semantic query would sort every
+    // row by zero - i.e. arbitrary order. Drop back to whatever was in effect before the query.
+    if(sortBy==='relevance'){sortBy=prevSort||'date';prevSort=null;syncSortUI()}
+    cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;if(!passModel(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
 async function applySort(){
+    if(sortBy==='relevance'){cFiles.sort((a,b)=>sortDirection==='asc'?(a.s||0)-(b.s||0):(b.s||0)-(a.s||0));return}
     if(sortBy==='name'){
         cFiles.sort((a,b)=>{
             const cmp=a.n.localeCompare(b.n);
@@ -1474,7 +1527,7 @@ function syncSortUI(){
 async function changeSort(){
     const val=document.getElementById('sortSelect').value;
     // Sensible default direction per field: names read A→Z, dates read newest-first.
-    if(val!==sortBy)sortDirection=(val==='name'||val==='model')?'asc':'desc';
+    if(val!==sortBy)sortDirection=(val==='name'||val==='model')?'asc':'desc';   // relevance reads best-first, i.e. desc
     sortBy=val;
     curPage=0;selectedIndex=-1;syncSortUI();
     await applySort();rend();
@@ -1579,12 +1632,13 @@ async function loadTileMedia(host){
 
 function rend(){
     clearURLs();
-    const c=document.getElementById('grid');c.innerHTML='';c.className=vMode==='stats'?'stats-view':(vMode==='dups'?'dup-view':(vMode==='grid'?'grid':'list-view'));document.getElementById('fCount').innerText=`${cFiles.length} items`;
+    const c=document.getElementById('grid');c.innerHTML='';c.className=vMode==='stats'?'stats-view':(vMode==='dups'?'dup-view':(vMode==='faces'?'faces-view':(vMode==='grid'?'grid':'list-view')));document.getElementById('fCount').innerText=`${cFiles.length} items`;
     if(mediaIO){mediaIO.disconnect();mediaIO=null}
     clampPage();renderPager();
     if(vMode==='stats'){renderStats(c);return}
     if(vMode==='dups'){renderDuplicates(c);return}
-    
+    if(vMode==='faces'){renderFaces(c);return}
+
     const getDragData = (path) => {
         if(selectedItems.has(path) && selectedItems.size > 1) {
             return JSON.stringify([...selectedItems]);
@@ -1810,6 +1864,13 @@ document.addEventListener('keydown',e=>{
         if(e.key==='Escape'){e.preventDefault();closeJsonDialog()}
         return;
     }
+    // Same reasoning as the JSON dialog: the AI panel is a modal, so Escape must close it whatever
+    // has focus. Placed before the input guard, or focus in the rename box would swallow it.
+    const ao=document.getElementById('aiOverlay');
+    if(ao&&!ao.classList.contains('hidden')){
+        if(e.key==='Escape'){e.preventDefault();hideAI()}
+        return;
+    }
     if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'){
         if(e.key==='Escape'){const ap=document.getElementById('advPanel');if(ap&&!ap.classList.contains('hidden'))toggleAdvSearch();e.target.blur();hideHelp()}
         return}
@@ -1820,7 +1881,7 @@ document.addEventListener('keydown',e=>{
         hideHelp(); return;
     }
     if(e.key==='Enter'&&selectedIndex>=0&&selectedIndex<cFiles.length){enterDet(selectedIndex);return}
-    if(e.key==='Delete'&&selectedItems.size>0){if(confirm(`Delete ${selectedItems.size} item(s)?`)){selectedItems.forEach(p=>{const name=p.split('/').pop();const parentPath=p.includes('/')?p.substring(0,p.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;parentHandle.removeEntry(name).then(()=>{fReg.delete(p);cache.delete(p);dDel(p)}).catch(e=>console.error(e))});selectedItems.clear();setTimeout(()=>fullScan(),500);rend()};return}
+    if(e.key==='Delete'&&selectedItems.size>0){if(confirm(`Delete ${selectedItems.size} item(s)?`)){selectedItems.forEach(p=>{const name=p.split('/').pop();const parentPath=p.includes('/')?p.substring(0,p.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;parentHandle.removeEntry(name).then(()=>{fReg.delete(p);cache.delete(p);aiInvalidateMat();dDel(p)}).catch(e=>console.error(e))});selectedItems.clear();setTimeout(()=>fullScan(),500);rend()};return}
     if(e.key==='f'||e.key==='F'){if(!e.ctrlKey){e.preventDefault();document.getElementById('sIn').focus();return}}
     if(e.key==='r'||e.key==='R'){if(!e.ctrlKey){e.preventDefault();fullScan();return}}
     if(e.key==='t'||e.key==='T'){if(!e.ctrlKey){e.preventDefault();toggleTheme();return}}
@@ -2143,7 +2204,7 @@ async function renameFile(){
 //   and   := unary (AND? unary)*
 //   unary := ('-'|'!'|NOT) unary | '(' or ')' | term
 //   term  := [field:]("quoted phrase" | word)
-const FIELD_ALIAS={file:'name',filename:'name',fn:'name',folder:'path',dir:'path',pos:'prompt',positive:'prompt',prompt:'prompt',negative:'neg',neg:'neg',model:'model',checkpoint:'model',ckpt:'model',sampler:'sampler',seed:'seed',steps:'steps',cfg:'cfg',size:'size',dim:'size',resolution:'size',lora:'lora',resource:'lora',res:'lora',name:'name',path:'path'};
+const FIELD_ALIAS={file:'name',filename:'name',fn:'name',folder:'path',dir:'path',pos:'prompt',positive:'prompt',prompt:'prompt',negative:'neg',neg:'neg',model:'model',checkpoint:'model',ckpt:'model',sampler:'sampler',seed:'seed',steps:'steps',cfg:'cfg',size:'size',dim:'size',resolution:'size',lora:'lora',resource:'lora',res:'lora',name:'name',path:'path',face:'face',person:'face',who:'face',sem:'sem',like:'like'};
 
 function advTokenize(q){
     const T=[],ws=c=>/\s/.test(c);let i=0;
@@ -2191,12 +2252,19 @@ function searchFields(p,v){
         steps:String(meta.steps==null?'':meta.steps).toLowerCase(),
         cfg:String(meta.cfg==null?'':meta.cfg).toLowerCase(),
         size:String(v.dim||meta.size||'').toLowerCase(),
-        lora:(m.resources||[]).map(r=>`${r.type||''} ${r.name||''}`).join(' ').toLowerCase()};
-    f.all=[f.name,f.path,f.prompt,f.neg,f.model,f.sampler,f.seed,f.steps,f.cfg,f.size,f.lora].join('  ');
+        lora:(m.resources||[]).map(r=>`${r.type||''} ${r.name||''}`).join(' ').toLowerCase(),
+        // Names resolve at query time from AIC, never denormalized onto the record - a rename would
+        // otherwise have to rewrite hundreds of items. Both the name and the stable auto-label go in,
+        // so face:rob and face:person-12 each match, and a multi-person image matches all of them.
+        // c<0 is the noise bucket (a face too isolated to be a person yet). Including it would
+        // emit the literal token "person--1" and make every unclustered face match face:person.
+        face:(v.faces||[]).filter(x=>x.c>=0).map(x=>`${AIC.get(x.c)||'unnamed'} person-${x.c}`).join(' ').toLowerCase()};
+    f.all=[f.name,f.path,f.prompt,f.neg,f.model,f.sampler,f.seed,f.steps,f.cfg,f.size,f.lora,f.face].join('  ');
     return f;
 }
 function advEval(n,f){
     if(!n)return true;
+    if(n.t==='true')return true;            // a sem:/like: term advExtractSem lifted out of the boolean pass
     if(n.t==='and')return advEval(n.a,f)&&advEval(n.b,f);
     if(n.t==='or')return advEval(n.a,f)||advEval(n.b,f);
     if(n.t==='not')return !advEval(n.a,f);
@@ -2204,7 +2272,11 @@ function advEval(n,f){
     return (f[key]!==undefined?f[key]:f.all).includes(n.val);
 }
 async function runSearch(q){
-    const ast=advParse(q),a=[];
+    // The text encoder puts an await inside this function and scheduleSearch debounces at 160ms, so
+    // two keystrokes reliably put two runSearch calls in flight. Without this token the slower one
+    // finishes last and clobbers cFiles with stale results.
+    const seq=++searchSeq;
+    const sems=[],ast=advExtractSem(advParse(q),sems,false),a=[];
     for(const[p,v]of cache){
         if(!v)continue;
         const fh=fReg.get(p);if(!fh)continue;
@@ -2213,8 +2285,17 @@ async function runSearch(q){
         if(!advEval(ast,searchFields(p,v)))continue;
         a.push({p,h:fh,d:v.d||0,n:v.n||fh.name});
     }
+    let scored=false;
+    if(sems.length){
+        const qv=await aiQueryVecs(sems);if(seq!==searchSeq)return;
+        if(qv){aiScore(a,qv);scored=true}
+    }
+    if(scored){if(sortBy!=='relevance'){prevSort=sortBy;sortBy='relevance';sortDirection='desc'}}
+    else if(sortBy==='relevance'){sortBy=prevSort||'date';prevSort=null}
+    syncSortUI();
     cFiles=a;curPage=0;selectedIndex=-1;
-    await applySort();rend();
+    await applySort();if(seq!==searchSeq)return;
+    rend();
 }
 
 let searchT=null;
@@ -2229,6 +2310,7 @@ function clearSearch(){
     const i=document.getElementById('sIn');i.value='';i.classList.remove('adv-on');setClearVis(false);
     ['advAll','advAny','advNone'].forEach(x=>{const el=document.getElementById(x);if(el)el.value=''});
     const pv=document.getElementById('advPreview');if(pv)pv.textContent='—';
+    if(sortBy==='relevance'){sortBy=prevSort||'date';prevSort=null;syncSortUI()}
     clearTimeout(searchT);opD(cDir,currP);
 }
 function toggleAdvSearch(){
@@ -2267,4 +2349,872 @@ document.addEventListener('mousedown',e=>{
     if(p&&!p.classList.contains('hidden')&&!e.target.closest('.s-box'))toggleAdvSearch();
 });
 // =================== END ADVANCED SEARCH ===================
+
+// ===================== AI SEARCH =====================
+// On-device CLIP semantic search + face clustering. Gated entirely behind aiOK(): on file://
+// nothing here executes, because Chrome blocks WebNN/WebGPU/Workers outside a secure context.
+const aiOK=()=>window.isSecureContext&&/^https?:$/.test(location.protocol)&&localStorage.getItem('guru-ai')!=='off';
+let AIC=new Map(), prevSort=null, searchSeq=0, aiMeta=null;
+
+// --- AI:TOKENIZER ---
+// Pasted verbatim from ai/src/tokenizer.js - the worker importScripts the same
+// file, so the two must not diverge. Verified by ai/src/tokenizer.test.mjs.
+// OpenAI CLIP (ViT-B/32) byte-level BPE tokenizer, dependency-free.
+// Direct port of CLIP's simple_tokenizer.py (encoder/bpe/regex) so token
+// ids match the reference tokenizer exactly. Fixed-length-77 output is a
+// WebNN requirement, not part of the original algorithm.
+
+let CLIPV=null, CLIPM=null; // CLIPV: Map<symbol,id> from vocab.json; CLIPM: Map<"sym1 sym2",rank> from merges.txt
+
+// GPT-2/CLIP byte<->unicode table. BPE operates on "characters", but raw
+// bytes 0-255 include control/whitespace codepoints that would collide with
+// the regex splitter or just not round-trip as single chars. Printable-range
+// bytes map to themselves; every other byte gets remapped to an unused
+// codepoint above 255, so every possible byte has one stable single-char
+// representation and the mapping is reversible (unused here, but why the
+// table has to be a bijection, not just any escaping scheme).
+function _b2u(){
+  const bs=[];
+  for(let i=33;i<=126;i++)bs.push(i);
+  for(let i=161;i<=172;i++)bs.push(i);
+  for(let i=174;i<=255;i++)bs.push(i);
+  const cs=bs.slice();
+  let n=0;
+  for(let b=0;b<256;b++){ if(!bs.includes(b)){ bs.push(b); cs.push(256+n); n++; } }
+  const m=new Map();
+  for(let i=0;i<bs.length;i++) m.set(bs[i], String.fromCodePoint(cs[i]));
+  return m;
+}
+const B2U=_b2u();
+
+// Same split regex as CLIP: contractions, letter runs, single digits (numbers
+// are split digit-by-digit on purpose), then runs of "other" (punctuation/
+// symbols). \p{L}/\p{N} need the /u flag; text is lowercased before this
+// runs so the /i flag is belt-and-suspenders.
+const CLIP_PAT=/<\|startoftext\|>|<\|endoftext\|>|'s|'t|'re|'ve|'m|'ll|'d|[\p{L}]+|[\p{N}]|[^\s\p{L}\p{N}]+/giu;
+
+// Parse vocab.json + merges.txt once. vocabJson may be a JSON string or an
+// already-parsed object; mergesTxt is the raw merges.txt text (first line is
+// a "#version:" header, last line(s) may be blank — both are skipped).
+function clipVocabLoad(vocabJson, mergesTxt){
+  const vobj = typeof vocabJson==='string' ? JSON.parse(vocabJson) : vocabJson;
+  CLIPV = new Map(Object.entries(vobj));
+  CLIPM = new Map();
+  const lines = mergesTxt.split('\n');
+  let rank=0;
+  for(let i=1;i<lines.length;i++){
+    const l=lines[i].trim();
+    if(!l) continue;
+    CLIPM.set(l, rank++); // key format matches the pair keys built in _pairs(): "sym1 sym2"
+  }
+}
+
+function _pairs(word){
+  const s=new Set();
+  for(let i=0;i<word.length-1;i++) s.add(word[i]+' '+word[i+1]);
+  return s;
+}
+
+const _bpeCache=new Map();
+
+// Greedy lowest-rank-pair merging until no mergeable pair remains, per CLIP's
+// bpe(). `token` is already byte->unicode mapped (one JS char per input
+// byte). </w> marks the end of the *word*, not every symbol — it lets the
+// model tell "cat" mid-word apart from "cat" at a word boundary, and only
+// the last symbol of a word ever carries it.
+function _bpe(token){
+  if(_bpeCache.has(token)) return _bpeCache.get(token);
+  let word = token.length>1
+    ? token.slice(0,-1).split('').concat([token[token.length-1]+'</w>'])
+    : [token+'</w>'];
+  let pairs=_pairs(word);
+  if(!pairs.size){ _bpeCache.set(token, token+'</w>'); return token+'</w>'; }
+  while(true){
+    let best=null, bestRank=Infinity;
+    for(const p of pairs){ const r=CLIPM.has(p)?CLIPM.get(p):Infinity; if(r<bestRank){ bestRank=r; best=p; } }
+    if(best===null || !CLIPM.has(best)) break;
+    const sp=best.indexOf(' ');
+    const first=best.slice(0,sp), second=best.slice(sp+1);
+    const nw=[]; let i=0;
+    while(i<word.length){
+      const j=word.indexOf(first,i);
+      if(j===-1){ nw.push(...word.slice(i)); break; }
+      nw.push(...word.slice(i,j));
+      i=j;
+      if(word[i]===first && i<word.length-1 && word[i+1]===second){ nw.push(first+second); i+=2; }
+      else { nw.push(word[i]); i+=1; }
+    }
+    word=nw;
+    if(word.length===1) break;
+    pairs=_pairs(word);
+  }
+  const out=word.join(' ');
+  _bpeCache.set(token, out);
+  return out;
+}
+
+// CLIP's basic_clean() also runs ftfy.fix_text + double html-unescape before
+// this; skipped here to stay dependency-free. Only matters for text with
+// mojibake or HTML entities, which prompt strings don't normally contain.
+function _wordsOf(text){
+  const norm = text.replace(/\s+/g,' ').trim().toLowerCase();
+  return norm.match(CLIP_PAT) || [];
+}
+
+function _bytesToTokenStr(word){
+  const bytes = new TextEncoder().encode(word);
+  let out='';
+  for(let i=0;i<bytes.length;i++) out += B2U.get(bytes[i]);
+  return out;
+}
+
+// Tokenize to a fixed Int32Array(77): <|startoftext|> ... <|endoftext|>,
+// zero-padded. WebNN needs a static input shape, so 77 is not a cap to
+// relax later — truncation forces EOT into slot 76 so a cut-off sequence
+// still parses as "ended" rather than trailing off mid-token.
+function clipTokenize(str){
+  const out = new Int32Array(77);
+  const SOT = CLIPV.get('<|startoftext|>');
+  const EOT = CLIPV.get('<|endoftext|>');
+  const ids=[SOT];
+  const words=_wordsOf(str||'');
+  for(const w of words){
+    const tok=_bytesToTokenStr(w);
+    const bpeStr=_bpe(tok);
+    for(const sym of bpeStr.split(' ')){
+      const id=CLIPV.get(sym);
+      if(id!==undefined) ids.push(id);
+    }
+  }
+  ids.push(EOT);
+  if(ids.length>77){ ids.length=77; ids[76]=EOT; }
+  for(let i=0;i<ids.length;i++) out[i]=ids[i];
+  return out;
+}
+// --- /AI:TOKENIZER ---
+
+// --- AI:PREPROC ---
+// Pasted verbatim from ai/src/preproc.js - the worker importScripts the same
+// file, so the two must not diverge. Verified by ai/src/preproc.test.mjs.
+// Image preprocessing (CLIP + ArcFace) and int8 embedding codec, dependency-free.
+// Plain script -- no import/export -- gets pasted verbatim into the host script block
+// block later, so it must also run unmodified inside a Web Worker (hence
+// createImageBitmap + OffscreenCanvas throughout; `new Image()` doesn't exist there).
+
+// CLIP (ViT-B/32) per-channel normalization constants, RGB order.
+const CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073];
+const CLIP_STD  = [0.26862954, 0.26130258, 0.27577711];
+
+// Canonical ArcFace 5-point reference landmarks for a 112x112 aligned crop
+// (left eye, right eye, nose, left mouth corner, right mouth corner).
+const ARCFACE_REF = [[38.2946,51.6963],[73.5318,51.5014],[56.0252,71.7366],[41.5493,92.3655],[70.7299,92.2041]];
+
+// Blob needs decoding to a drawable; ImageBitmap/HTMLVideoElement/HTMLCanvasElement
+// are already valid drawImage() sources and are used as-is (so a caller who already
+// decoded via createImageBitmap once can hand that same bitmap to both preImage and
+// preFace without paying for a second decode).
+async function _toDrawable(src){
+  if (typeof Blob !== 'undefined' && src instanceof Blob) return await createImageBitmap(src);
+  return src;
+}
+function _srcDims(src){
+  // HTMLVideoElement reports size as videoWidth/videoHeight, everything else as width/height.
+  if (src && typeof src.videoWidth === 'number' && src.videoWidth) return [src.videoWidth, src.videoHeight];
+  return [src.width, src.height];
+}
+
+// ----- CLIP image preprocessing -----
+
+// Resize short side to 224 (CLIP's own Resize(224, BICUBIC)), THEN center-crop to
+// 224x224. This two-step order is load-bearing: a plain squash-resize straight to
+// 224x224 warps the aspect ratio and silently degrades retrieval quality rather than
+// erroring, so there's nothing that flags the bug -- it just quietly returns worse
+// matches forever.
+async function preImage(src){
+  const madeBitmap = (typeof Blob !== 'undefined' && src instanceof Blob);
+  const drawable = madeBitmap ? await createImageBitmap(src) : src;
+  const [sw, sh] = _srcDims(drawable);
+  const scale = 224 / Math.min(sw, sh);
+  const rw = Math.max(224, Math.round(sw * scale));
+  const rh = Math.max(224, Math.round(sh * scale));
+
+  const rcv = new OffscreenCanvas(rw, rh);
+  const rctx = rcv.getContext('2d');
+  rctx.imageSmoothingEnabled = true;
+  if ('imageSmoothingQuality' in rctx) rctx.imageSmoothingQuality = 'high'; // closest canvas gets to bicubic
+  rctx.drawImage(drawable, 0, 0, rw, rh);
+
+  const cx = Math.floor((rw - 224) / 2), cy = Math.floor((rh - 224) / 2);
+  const ccv = new OffscreenCanvas(224, 224);
+  const cctx = ccv.getContext('2d');
+  cctx.drawImage(rcv, cx, cy, 224, 224, 0, 0, 224, 224);
+
+  const { data } = cctx.getImageData(0, 0, 224, 224); // RGBA Uint8ClampedArray, interleaved
+  const n = 224 * 224;
+  const out = new Float32Array(3 * n);
+  // NCHW (channel-planar: all R, then all G, then all B) -- NOT interleaved. A model
+  // expecting NCHW fed interleaved data doesn't error, it just produces plausible-
+  // looking garbage, so this loop is the one place that ordering has to be exactly right.
+  for (let i = 0, o = 0; i < n; i++, o += 4){
+    out[i]         = (data[o]     / 255 - CLIP_MEAN[0]) / CLIP_STD[0];
+    out[n + i]     = (data[o + 1] / 255 - CLIP_MEAN[1]) / CLIP_STD[1];
+    out[2 * n + i] = (data[o + 2] / 255 - CLIP_MEAN[2]) / CLIP_STD[2];
+  }
+  if (madeBitmap && drawable.close) drawable.close(); // only close bitmaps we decoded ourselves
+  return out;
+}
+
+// ----- ArcFace alignment -----
+
+// Solve a 4x4 linear system in place via Gaussian elimination with partial pivoting.
+// 4x4-only helper for solveSimilarityTransform below -- not a general linear solver.
+function _solve4(M, rhs){
+  for (let col = 0; col < 4; col++){
+    let piv = col;
+    for (let r = col + 1; r < 4; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if (piv !== col){ const t = M[col]; M[col] = M[piv]; M[piv] = t; const tr = rhs[col]; rhs[col] = rhs[piv]; rhs[piv] = tr; }
+    const pv = M[col][col];
+    if (Math.abs(pv) < 1e-12) continue; // degenerate (e.g. all points coincident); leave row be
+    for (let r = 0; r < 4; r++){
+      if (r === col) continue;
+      const f = M[r][col] / pv;
+      if (f === 0) continue;
+      for (let c = col; c < 4; c++) M[r][c] -= f * M[col][c];
+      rhs[r] -= f * rhs[col];
+    }
+  }
+  const x = new Array(4);
+  for (let i = 0; i < 4; i++) x[i] = Math.abs(M[i][i]) < 1e-12 ? 0 : rhs[i] / M[i][i];
+  return x;
+}
+
+// Least-squares 2D similarity transform (uniform scale + rotation + translation, no
+// reflection) mapping src points onto dst points:
+//   dst_x = a*x - b*y + tx,  dst_y = b*x + a*y + ty      (a,b) == (s*cosθ, s*sinθ)
+// Parameterizing rotation+scale as the single pair (a,b) -- instead of scale and angle
+// separately -- keeps the whole model linear in its 4 unknowns [a,b,tx,ty], so N>=2
+// point correspondences solve directly via normal equations. That's the standard
+// Umeyama/Procrustes result for the *no-reflection* 2D case: because rotation+uniform-
+// scale matrices [[a,-b],[b,a]] already form a linear subspace (isomorphic to complex
+// multiplication), least-squares over that subspace needs no SVD and can't produce a
+// reflection by construction -- unlike the general N-D Umeyama solve.
+function solveSimilarityTransform(src, dst){
+  const n = src.length;
+  let Sxx = 0, Syy = 0, Sx = 0, Sy = 0;
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0;
+  for (let i = 0; i < n; i++){
+    const x = src[i][0], y = src[i][1], dx = dst[i][0], dy = dst[i][1];
+    Sxx += x * x; Syy += y * y; Sx += x; Sy += y;
+    b0 += x * dx + y * dy;
+    b1 += -y * dx + x * dy;
+    b2 += dx;
+    b3 += dy;
+  }
+  const Sxy2 = Sxx + Syy;
+  const M = [
+    [Sxy2, 0,    Sx,  Sy],
+    [0,    Sxy2, -Sy, Sx],
+    [Sx,   -Sy,  n,   0],
+    [Sy,   Sx,   0,   n],
+  ];
+  const [a, b, tx, ty] = _solve4(M, [b0, b1, b2, b3]);
+  return { a, b, tx, ty, scale: Math.hypot(a, b), angle: Math.atan2(b, a) };
+}
+
+// 5-point aligned 112x112 ArcFace crop. `kps` (10 numbers, x,y x5 in source-image
+// pixel coords) takes priority when present; `box` ([x,y,w,h]) is a fallback that
+// just crops+resizes -- squashing is acceptable there since it's a coarse fallback,
+// unlike preImage where it's a correctness bug.
+async function preFace(src, box, kps){
+  const madeBitmap = (typeof Blob !== 'undefined' && src instanceof Blob);
+  const drawable = madeBitmap ? await createImageBitmap(src) : src;
+  const cv = new OffscreenCanvas(112, 112);
+  const ctx = cv.getContext('2d');
+
+  if (kps && kps.length === 10){
+    const pts = [[kps[0],kps[1]],[kps[2],kps[3]],[kps[4],kps[5]],[kps[6],kps[7]],[kps[8],kps[9]]];
+    const { a, b, tx, ty } = solveSimilarityTransform(pts, ARCFACE_REF);
+    // Canvas setTransform(a,b,c,d,e,f) maps (x,y) -> (a*x+c*y+e, b*x+d*y+f); feeding it
+    // our (a,-b,b,a,tx,ty) makes drawImage(drawable,0,0) forward-warp every source pixel
+    // through the solved similarity transform directly, with the canvas's own bilinear
+    // resampling doing the work -- no manual per-pixel warpAffine needed.
+    ctx.setTransform(a, b, -b, a, tx, ty);
+    ctx.drawImage(drawable, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  } else if (box && box.length === 4){
+    const [sw, sh] = _srcDims(drawable);
+    const [x, y, w, h] = box;
+    const cx = x + w / 2, cy = y + h / 2;
+    const ew = w * 1.3, eh = h * 1.3;
+    const ex0 = Math.max(0, cx - ew / 2), ey0 = Math.max(0, cy - eh / 2);
+    const ex1 = Math.min(sw, cx + ew / 2), ey1 = Math.min(sh, cy + eh / 2);
+    const cw = Math.max(1, ex1 - ex0), ch = Math.max(1, ey1 - ey0);
+    ctx.drawImage(drawable, ex0, ey0, cw, ch, 0, 0, 112, 112);
+  } else {
+    throw new Error('preFace: requires kps (10 numbers) or box ([x,y,w,h])');
+  }
+
+  const { data } = ctx.getImageData(0, 0, 112, 112);
+  const n = 112 * 112;
+  const out = new Float32Array(3 * n);
+  // ArcFace norm (x-127.5)/128 on 0-255 values, NCHW, RGB order -- same plane layout
+  // rationale as preImage above.
+  for (let i = 0, o = 0; i < n; i++, o += 4){
+    out[i]         = (data[o]     - 127.5) / 128.0;
+    out[n + i]     = (data[o + 1] - 127.5) / 128.0;
+    out[2 * n + i] = (data[o + 2] - 127.5) / 128.0;
+  }
+  if (madeBitmap && drawable.close) drawable.close();
+  return out;
+}
+
+// ----- int8 embedding codec -----
+
+// Symmetric (zero-point-free) per-vector quantization: q = round(f/s), s = max(|f|)/127.
+// Symmetric, not affine, because embeddings are ranked by cosine similarity, which is
+// scale-invariant but NOT shift-invariant -- an affine zero-point would have to be
+// subtracted back out before every dot product, which defeats doing this in int math
+// at all. Clamped to [-127,127] (not -128) so the range is symmetric around 0.
+function quantI8(f32){
+  let mx = 0;
+  for (let i = 0; i < f32.length; i++){ const a = f32[i] < 0 ? -f32[i] : f32[i]; if (a > mx) mx = a; }
+  const q = new Int8Array(f32.length);
+  if (mx === 0) return { q, s: 0 }; // all-zero vector: skip 1/0 below, q is already all-zero
+  const s = mx / 127, inv = 1 / s;
+  for (let i = 0; i < f32.length; i++){
+    let v = Math.round(f32[i] * inv);
+    v = v > 127 ? 127 : (v < -127 ? -127 : v);
+    q[i] = v;
+  }
+  return { q, s };
+}
+
+function deqI8(q, s){
+  const out = new Float32Array(q.length);
+  for (let i = 0; i < q.length; i++) out[i] = q[i] * s; // multiply, never divide -- NaN-safe even when s===0
+  return out;
+}
+
+// True cosine similarity: dot(a,b) / (|a| * |b|), computed over the raw int8 codes
+// with an integer accumulator (safe well past any realistic embedding dimension --
+// int8*int8 summed over thousands of terms stays far under 2^53). `as`/`bs` are kept
+// in the signature for symmetry with the codec but are provably inert here: for
+// symmetric quantization (q=f/s) the scale cancels exactly in the cosine ratio --
+// (as*bs*dot)/(as*sqrt(na)*bs*sqrt(nb)) == dot/sqrt(na*nb) -- so this is the *exact*
+// cosine, not an approximation that happens to skip the scales.
+function cosI8(aq, as, bq, bs){
+  const n = aq.length;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < n; i++){
+    const av = aq[i], bv = bq[i];
+    dot += av * bv; na += av * av; nb += bv * bv;
+  }
+  if (na === 0 || nb === 0) return 0; // zero vector: cosine undefined, define as 0 rather than NaN
+  return dot / Math.sqrt(na * nb);
+}
+
+// Hot loop: cosine of one row of a packed row-major Int8Array matrix (dim values/row)
+// against a standalone int8 query vector. Ranks 10k+ items per keystroke, so this is
+// allocation-free and closure-free by design -- no .map/.slice, no function values
+// created per call. sArr/bs accepted for signature symmetry with cosI8 (see there for
+// why per-vector scale doesn't need to enter the computation at all).
+function cosI8Row(mat, row, dim, sArr, bq, bs){
+  const base = row * dim;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < dim; i++){
+    const av = mat[base + i], bv = bq[i];
+    dot += av * bv; na += av * av; nb += bv * bv;
+  }
+  if (na === 0 || nb === 0) return 0;
+  return dot / Math.sqrt(na * nb);
+}
+
+// In-place L2 normalize; returns the same array so callers can chain. Embeddings are
+// normalized before quantization so int8's 127 buckets get spent on *direction*
+// (what cosine ranking actually uses), not wasted on magnitude variance across items.
+function l2norm(f32){
+  let ss = 0;
+  for (let i = 0; i < f32.length; i++) ss += f32[i] * f32[i];
+  const norm = Math.sqrt(ss);
+  if (norm === 0) return f32; // zero vector: nothing to normalize, leave as-is
+  const inv = 1 / norm;
+  for (let i = 0; i < f32.length; i++) f32[i] *= inv;
+  return f32;
+}
+// --- /AI:PREPROC ---
+
+// --- AI:SEARCH ---
+// Packed scoring matrix. Built lazily on the first semantic query and reused until the library
+// changes. 10k x 512 int8 = 5.1MB contiguous, so a full scan is a ~5-15ms tight loop - well inside
+// the 160ms search debounce. Brute force is correct to ~200k items; there is deliberately no ANN
+// index. Videos keep their per-frame vectors and score max() over frames, because a pooled mean
+// loses "there is a dog for 2 seconds of this 60-second clip".
+let AIMat=null,AIScale=null,AIPaths=null,AIRow=null,AIFrames=null;
+let aiTopK=+(localStorage.getItem('guru-ai-topk')||200);
+
+function aiInvalidateMat(){AIMat=null;AIScale=null;AIPaths=null;AIRow=null;AIFrames=null}
+
+function aiBuildMat(){
+    if(AIMat)return;
+    const rows=[];
+    for(const[p,v]of cache){if(v&&v.emb&&v.emb.length===512&&fReg.has(p))rows.push(p)}
+    AIPaths=rows;AIRow=new Map();AIFrames=new Map();
+    AIMat=new Int8Array(rows.length*512);AIScale=new Float32Array(rows.length);
+    for(let i=0;i<rows.length;i++){
+        const v=cache.get(rows[i]);
+        AIMat.set(v.emb,i*512);AIScale[i]=v.embS||0;AIRow.set(rows[i],i);
+        if(v.embF&&v.nF>1)AIFrames.set(rows[i],{f:v.embF,n:v.nF,s:v.embS||0});
+    }
+}
+// Coverage, for the "why isn't my image showing up" question. Silently ranking a subset of the
+// library is the worst outcome, so this number is surfaced in #fCount on every semantic query.
+function aiCoverage(){
+    let done=0,skip=0,todo=0;
+    for(const p of fReg.keys()){const v=cache.get(p);
+        if(!v)todo++;else if(v.aiSkip)skip++;else if(v.emb&&v.ai===AIV)done++;else todo++}
+    return{done,skip,todo,total:fReg.size};
+}
+// Embeds each sem:/like: term once. `like:` needs no inference at all - the query vector is the
+// item's own stored embedding, so "find similar" is instant.
+async function aiQueryVecs(sems){
+    if(!aiOK()||!sems||!sems.length)return null;
+    aiBuildMat();
+    const out=[];
+    for(const s of sems){
+        if(s.kind==='like'){
+            const key=s.q.toLowerCase();
+            let hit=null;
+            for(const p of AIPaths){if(p.toLowerCase()===key||p.toLowerCase().endsWith('/'+key)){hit=p;break}}
+            if(!hit)continue;
+            const v=cache.get(hit);
+            out.push({kind:'like',neg:s.neg,emb:v.emb,embS:v.embS,self:hit});
+        }else{
+            let r=null;
+            try{r=await aiEmbedText(s.q)}catch(e){console.warn('query embed failed',e)}
+            if(!r)continue;
+            out.push({kind:'sem',neg:s.neg,emb:r.emb,embS:r.embS});
+        }
+    }
+    return out.length?out:null;
+}
+// Sets .s on each row and drops what cannot or should not rank. Threshold is RELATIVE: CLIP cosines
+// sit in 0.15-0.35 and shift with phrasing, so an absolute floor is fragile. like: is rank-only,
+// with no floor, because image-to-image cosines run much higher (0.6-0.95).
+function aiScore(a,qv){
+    aiBuildMat();
+    const hasSem=qv.some(q=>q.kind==='sem'&&!q.neg);
+    for(const r of a){
+        const row=AIRow.has(r.p)?AIRow.get(r.p):-1;
+        if(row<0){r.s=-1;continue}
+        let s=Infinity;                       // multiple positive terms AND together as min()
+        for(const q of qv){
+            if(q.neg)continue;
+            let c=cosI8Row(AIMat,row,512,AIScale,q.emb,q.embS);
+            const fr=AIFrames.get(r.p);
+            if(fr){for(let k=0;k<fr.n;k++){
+                const sub=fr.f.subarray(k*512,(k+1)*512);
+                const cf=cosI8(sub,fr.s,q.emb,q.embS);if(cf>c)c=cf}}
+            if(c<s)s=c;
+        }
+        if(s===Infinity)s=0;
+        for(const q of qv){                   // negated terms subtract
+            if(!q.neg)continue;
+            s-=Math.max(0,cosI8Row(AIMat,row,512,AIScale,q.emb,q.embS));
+        }
+        r.s=s;
+    }
+    let out=a.filter(r=>r.s>-1);
+    if(hasSem&&out.length){
+        const best=Math.max(...out.map(r=>r.s));
+        out=out.filter(r=>r.s>=best*0.75);
+    }
+    out.sort((x,y)=>y.s-x.s);
+    if(aiTopK>0&&out.length>aiTopK)out=out.slice(0,aiTopK);
+    a.length=0;for(const r of out)a.push(r);
+    const cov=aiCoverage();
+    if(cov.todo)setTimeout(()=>{const el=document.getElementById('fCount');
+        if(el)el.innerText=`${cFiles.length} items · semantic · ${cov.todo.toLocaleString()} not yet indexed`},0);
+}
+// Writes the query into #sIn rather than entering a hidden mode, so it stays visible, editable and
+// combinable with boolean terms (like:"x.png" model:flux). Windows paths cannot contain '"'.
+function findSimilar(p){
+    const i=document.getElementById('sIn');if(!i)return;
+    i.value='like:"'+p+'"';i.classList.add('adv-on');setClearVis(true);scheduleSearch(i.value);
+}
+// --- /AI:SEARCH ---
+
+// --- AI:PANEL ---
+let aiW=null,aiReady=null,aiBackend=null,aiSeq=0,aiPend=new Map(),aiJob=null,aiProg=null,aiVid=null;
+
+// One worker, created on first use. Never on file:// - aiOK() gates every entry point, so no
+// worker is spawned, no model is fetched and no navigator.ml probe happens there.
+let aiInitDone=null;
+function aiWorker(){
+    if(aiW)return aiReady;
+    // ?v=AIV busts a previously cached copy. ai-worker.js is served no-store now, but an entry
+    // cached back when /ai/*.js was `immutable` survives that change and Chrome will keep serving
+    // it for a year without revalidating - so edits to the worker appear to do nothing.
+    aiW=new Worker('ai/ai-worker.js?v='+AIV);
+    aiW.onerror=e=>{const p=[...aiPend.values()];aiPend.clear();
+        p.forEach(x=>x.rej(new Error(e.message||'worker error')));
+        if(aiInitDone){aiInitDone.rej(new Error(e.message||'worker failed to load'));aiInitDone=null}};
+    aiW.onmessage=e=>{
+        const d=e.data;
+        // `ready` carries NO id (see ai/CONTRACT.md §2), so it can never be matched by the id-keyed
+        // pending map - routing it through there hangs init forever. Handle it before that lookup.
+        if(d.t==='ready'){if(aiInitDone){aiInitDone.res(d);aiInitDone=null}return}
+        if(d.t==='prog'&&d.phase==='load'){aiSetModelRow(d);aiPaintProgress();return}
+        if(d.t==='prog'){if(aiProg)aiProg(d);return}
+        if(d.id==null)return;
+        const w=aiPend.get(d.id);if(!w)return;
+        if(d.t==='err'){aiPend.delete(d.id);w.rej(Object.assign(new Error(d.msg||d.code),{code:d.code}));return}
+        aiPend.delete(d.id);w.res(d);
+    };
+    aiReady=(async()=>{
+        const man=await (await fetch('ai/models/manifest.json',{cache:'no-store'})).json();
+        clipVocabLoad(await (await fetch('ai/models/clip-tokenizer/vocab.json')).json(),
+                      await (await fetch('ai/models/clip-tokenizer/merges.txt')).text());
+        const wait=new Promise((res,rej)=>{
+            aiInitDone={res,rej};
+            setTimeout(()=>{if(aiInitDone){aiInitDone=null;rej(new Error('model load timed out'))}},180000);
+        });
+        aiW.postMessage({t:'init',id:'init',manifest:man,prefer:localStorage.getItem('guru-ai-backend')||'auto'});
+        const r=await wait;
+        aiBackend=r.backend;aiPaint();return r;
+    })();
+    return aiReady;
+}
+function aiSend(msg,timeout,transfer){
+    const id=msg.id||('m'+(++aiSeq));msg.id=id;
+    return new Promise((res,rej)=>{
+        const to=setTimeout(()=>{aiPend.delete(id);rej(new Error('timed out'))},timeout||60000);
+        aiPend.set(id,{res:v=>{clearTimeout(to);res(v)},rej:e=>{clearTimeout(to);rej(e)}});
+        transfer?aiW.postMessage(msg,transfer):aiW.postMessage(msg);
+    });
+}
+// Query embedding. Runs once per debounced keystroke, so its cost is invisible; memoized anyway
+// because retyping the same query is common.
+const aiTxtCache=new Map();
+async function aiEmbedText(q){
+    if(aiTxtCache.has(q))return aiTxtCache.get(q);
+    await aiWorker();
+    const r=await aiSend({t:'text',ids:Array.from(clipTokenize(q))},60000);
+    const v={emb:r.emb,embS:r.embS};
+    if(aiTxtCache.size>200)aiTxtCache.clear();
+    aiTxtCache.set(q,v);return v;
+}
+
+// ---- the batch job -------------------------------------------------------------------------
+// Opt-in, cancellable, and resumable for free: every result is written as it completes and
+// aiNeeds() re-derives the remaining set on restart, so there is no progress bookkeeping to keep.
+async function aiAnalyze(){
+    if(!aiOK()){toggleAI();return}
+    if(aiJob){showToast('Analysis already running.','info');return}
+    const todo=[...fReg.keys()].filter(p=>aiNeeds(cache.get(p)));
+    if(!todo.length){showToast('Everything is already indexed.','success');aiPaint();return}
+    aiJob={cancel:false,done:0,total:todo.length,t0:Date.now()};
+    aiPaint();
+    try{
+        await aiWorker();
+        const buf=[];
+        for(const p of todo){
+            if(aiJob.cancel)break;
+            const h=fReg.get(p);if(!h)continue;
+            const it=cache.get(p)||{p,n:h.name};
+            try{
+                const f=await h.getFile();
+                const r=RX_VIDEO.test(f.name)?await aiDoVideo(f):await aiDoImage(f);
+                Object.assign(it,r,{ai:AIV});delete it.aiSkip;
+            }catch(e){
+                it.ai=AIV;it.aiSkip=(e&&e.code==='nodecode')||/decode|video/i.test(String(e.message))?'nodecode':'error';
+            }
+            cache.set(p,it);buf.push(it);
+            if(buf.length>=100){await dPutMany(buf.splice(0,buf.length))}
+            aiJob.done++;
+            if(aiJob.done%3===0||aiJob.done===todo.length)aiPaintProgress();
+        }
+        if(buf.length)await dPutMany(buf);
+        if(!aiJob.cancel)await aiCluster();
+    }catch(e){showToast('Analysis failed: '+esc(String(e.message||e)),'error')}
+    const n=aiJob.done,cancelled=aiJob.cancel;
+    aiJob=null;aiInvalidateMat();aiPaint();
+    showToast(cancelled?`Analysis cancelled after ${n} items.`:`Analyzed ${n} items.`,cancelled?'info':'success');
+}
+function aiCancelJob(){if(aiJob){aiJob.cancel=true;try{aiW.postMessage({t:'cancel'})}catch(e){}}}
+
+async function aiDoImage(f){
+    const bmp=await createImageBitmap(f);
+    try{
+        const r=await aiSend({t:'img',bitmap:bmp,want:{clip:true,faces:true}},120000,[bmp]);
+        return{emb:r.emb,embS:r.embS,faces:r.faces||[],aiMs:r.ms};
+    }catch(e){try{bmp.close()}catch(x){}throw e}
+}
+// Video frames cannot be sampled in the worker - there is no <video> element there. One reused
+// off-DOM element, object-URL sourced so the file streams rather than being buffered (CLAUDE.md:
+// never f.arrayBuffer() a video). Every await races a timeout, because an undecodable container
+// (.mkv) never fires 'loadedmetadata' at all - it errors, or it hangs.
+async function aiDoVideo(f){
+    if(!aiVid){aiVid=document.createElement('video');aiVid.muted=true;aiVid.preload='metadata';aiVid.playsInline=true}
+    const v=aiVid,u=URL.createObjectURL(f);
+    const race=(ev,ms)=>new Promise((res,rej)=>{
+        const to=setTimeout(()=>{cl();rej(Object.assign(new Error('video timeout'),{code:'nodecode'}))},ms);
+        const ok=()=>{cl();res()},bad=()=>{cl();rej(Object.assign(new Error('video decode failed'),{code:'nodecode'}))};
+        const cl=()=>{clearTimeout(to);v.removeEventListener(ev,ok);v.removeEventListener('error',bad)};
+        v.addEventListener(ev,ok,{once:true});v.addEventListener('error',bad,{once:true});
+    });
+    try{
+        v.src=u;v.load();
+        await race('loadedmetadata',8000);
+        const d=v.duration||0,ts=(!isFinite(d)||d<2)?[0]:[.1,.3,.5,.7,.9].map(x=>x*d);
+        const F=[],S=[];let last=null;
+        for(const t of ts){
+            v.currentTime=t;
+            try{await race('seeked',3000)}catch(e){break}
+            const bmp=await createImageBitmap(v);
+            const r=await aiSend({t:'frame',bitmap:bmp,fi:F.length,nF:ts.length,want:{clip:true,faces:F.length===0}},120000,[bmp]);
+            F.push(r.emb);S.push(r.embS);if(F.length===1)last=r;
+        }
+        if(!F.length)throw Object.assign(new Error('no frames'),{code:'nodecode'});
+        const embF=new Int8Array(F.length*512);F.forEach((e,i)=>embF.set(e,i*512));
+        return{emb:F[0],embS:S[0],embF,nF:F.length,faces:(last&&last.faces)||[],aiMs:0};
+    }finally{
+        // Not optional: without this Chrome accumulates decoders across hundreds of videos and stalls.
+        try{v.pause()}catch(e){}
+        v.removeAttribute('src');try{v.load()}catch(e){}
+        URL.revokeObjectURL(u);
+    }
+}
+async function aiCluster(){
+    const keys=[],vecs=[],scales=[];
+    for(const[p,v]of cache){if(!v||!v.faces)continue;
+        v.faces.forEach((f,i)=>{if(f.emb){keys.push(p+'#'+i);vecs.push(f.emb);scales.push(f.embS||0)}})}
+    if(vecs.length<2)return;
+    const V=new Int8Array(vecs.length*512);vecs.forEach((e,i)=>V.set(e,i*512));
+    // minN:2 - the worker defaults to 3, which is too strict for a personal library: someone who
+    // appears in exactly two photos would be dropped into noise and never show up in People at all.
+    // Singletons still go to noise, otherwise every one-off false positive becomes a "person".
+    const r=await aiSend({t:'cluster',embs:{v:V,s:Float32Array.from(scales),key:keys},ths:{assign:.50,merge:.55,minN:2}},180000);
+    const byKey=new Map();keys.forEach((k,i)=>byKey.set(k,r.assign[i]));
+    const touched=new Set();
+    for(const[k,c]of byKey){const[p,i]=k.split('#');const v=cache.get(p);
+        if(v&&v.faces&&v.faces[+i]){v.faces[+i].c=c;touched.add(p)}}
+    await dPutMany([...touched].map(p=>cache.get(p)));
+    aiMeta=aiMeta||{p:'__ai__'};
+    aiMeta.v=AIV;aiMeta.lastRun=Date.now();aiMeta.backend=aiBackend;
+    const old=new Map((aiMeta.clusters||[]).map(c=>[c.id,c]));
+    aiMeta.clusters=(r.clusters||[]).map(c=>({...c,name:(old.get(c.id)||{}).name||'',hidden:(old.get(c.id)||{}).hidden||false}));
+    AIC=new Map(aiMeta.clusters.map(c=>[c.id,c.name||'']));
+    await dPut(aiMeta);
+}
+
+// ---- panel ---------------------------------------------------------------------------------
+function toggleAI(){
+    const o=document.getElementById('aiOverlay');
+    if(!o)return;
+    const open=o.classList.contains('hidden');
+    o.classList.toggle('hidden',!open);
+    if(open){aiPaint();if(aiOK()&&!aiW)aiWorker().catch(e=>{aiBackend={name:'error',device:String(e.message||e)};aiPaint()})}
+}
+function hideAI(){const o=document.getElementById('aiOverlay');if(o)o.classList.add('hidden')}
+function aiSetModelRow(d){
+    const t=document.getElementById('aiModels');if(!t||!d.model)return;
+    let r=document.getElementById('aiM-'+d.model);
+    if(!r){r=document.createElement('div');r.id='aiM-'+d.model;r.className='ai-row';t.appendChild(r)}
+    r.innerHTML=`<span>${esc(d.model)}</span><span class="ai-chip">${esc(d.name+(d.device?':'+d.device:''))}</span>`
+      +`<span class="ai-dim">${d.ms?d.ms.toFixed(1)+'ms':''} ${d.tier||''}${d.partitioned?' · demoted':''}</span>`;
+}
+function aiPaintProgress(){
+    const t=document.getElementById('aiProgTxt'),f=document.getElementById('aiProgFill');
+    if(!aiJob)return;
+    const{done,total,t0}=aiJob,pct=total?Math.round(done/total*100):0;
+    // Models take ~17s to compile on first run and nothing else happens meanwhile. Without saying
+    // so, a 0% bar reading "0 / N" for twenty seconds looks like the job has hung.
+    if(!aiBackend&&!done){
+        if(t)t.textContent='Loading models — first run compiles them on the NPU, ~20s…';
+        if(f)f.style.width='4%';
+        return;
+    }
+    const el=Date.now()-t0,eta=done>3?Math.round((el/done)*(total-done)/1000):0;
+    if(t)t.textContent=`${done} / ${total}`+(eta?`  ·  ~${eta>90?Math.round(eta/60)+'m':eta+'s'} left`:'');
+    if(f)f.style.width=pct+'%';
+    const b=document.getElementById('aiBtn');if(b)b.title='AI Search — analyzing '+pct+'%';
+}
+function aiPaint(){
+    const el=document.getElementById('aiBody');if(!el)return;
+    if(!aiOK()){
+        el.innerHTML=`<div class="ai-warn-box"><b>AI search needs a secure context.</b>
+          <p>Chrome blocks WebNN, WebGPU and Web Workers on <code>file://</code>, so on-device AI cannot run here.
+          The rest of the app is unaffected.</p>
+          <pre>node serve.mjs</pre><p>then open <code>http://127.0.0.1:8787</code></p></div>`;
+        return;
+    }
+    const c=aiCoverage();
+    const bk=aiBackend?`${esc(aiBackend.name)}${aiBackend.device?':'+esc(aiBackend.device):''}`:'probing…';
+    const nCl=(aiMeta&&aiMeta.clusters||[]).filter(x=>!x.hidden).length;
+    el.innerHTML=`
+      <div class="ai-grid">
+        <div><span class="ai-dim">backend</span><div class="ai-chip">${bk}</div></div>
+        <div><span class="ai-dim">indexed</span><div><b>${c.done.toLocaleString()}</b> / ${c.total.toLocaleString()}</div></div>
+        <div><span class="ai-dim">unsupported</span><div>${c.skip.toLocaleString()}</div></div>
+        <div><span class="ai-dim">people</span><div>${nCl}</div></div>
+      </div>
+      <div id="aiModels" class="ai-models"></div>
+      ${aiJob?`<div class="dup-track"><div id="aiProgFill" class="dup-fill"></div></div>
+               <div id="aiProgTxt" class="ai-dim" style="margin-top:6px"></div>`:''}
+      <div class="ai-actions">
+        ${aiJob?`<button class="dup-btn" onclick="aiCancelJob()">Cancel</button>`
+               :`<button class="dup-btn primary" onclick="aiAnalyze()">Analyze ${c.todo.toLocaleString()} items</button>`}
+        <button class="dup-btn" onclick="hideAI();setView('faces')">Review people →</button>
+        <button class="dup-btn" onclick="aiClearData()">Clear AI data</button>
+      </div>
+      <p class="ai-dim" style="margin-top:14px;line-height:1.5">
+        Search with <code>sem:"a giraffe on a beach"</code> for meaning, or <code>face:name</code> once
+        you have named someone. Both combine with normal filters, e.g.
+        <code>sem:"portrait" model:flux -blurry</code>.</p>`;
+    if(aiJob)aiPaintProgress();
+}
+async function aiClearData(){
+    if(!confirm('Remove all AI embeddings, faces and people names? The images themselves are untouched.'))return;
+    const upd=[];
+    for(const[p,v]of cache){if(v&&(v.emb||v.faces||v.ai!==undefined)){
+        delete v.emb;delete v.embS;delete v.embF;delete v.nF;delete v.faces;delete v.ai;delete v.aiSkip;delete v.aiMs;upd.push(v)}}
+    await dPutMany(upd);
+    if(aiMeta){await dDel('__ai__');aiMeta=null}
+    AIC=new Map();aiInvalidateMat();aiTxtCache.clear();
+    try{for(const k of await caches.keys())if(k.startsWith('guru-ai'))await caches.delete(k)}catch(e){}
+    aiPaint();showToast('AI data cleared.','success');
+}
+// --- /AI:PANEL ---
+
+// --- AI:FACES ---
+// Members are derived from the cache rather than stored on the cluster, so a rename or merge never
+// has to rewrite hundreds of file records - it touches only the __ai__ sentinel.
+function aiClusterMembers(){
+    const m=new Map();
+    for(const[p,v]of cache){
+        if(!v||!v.faces||!fReg.has(p))continue;
+        v.faces.forEach((f,i)=>{if(f.c==null)return;
+            if(!m.has(f.c))m.set(f.c,[]);
+            m.get(f.c).push({p,i,box:f.box,score:f.score||0})});
+    }
+    return m;
+}
+function renderFaces(c){
+    if(!aiOK()){c.innerHTML='<div class="json-empty">AI features need the local launcher — run <code>node serve.mjs</code>.</div>';return}
+    const mem=aiClusterMembers();
+    const cl=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&mem.has(x.id))
+        .sort((a,b)=>(mem.get(b.id).length)-(mem.get(a.id).length));
+    document.getElementById('fCount').innerText=`${cl.length} people`;
+    if(!cl.length){c.innerHTML='<div class="json-empty">No people found yet. Open the 🧠 panel and run Analyze.</div>';return}
+    // Sticky bar reuses .dup-bar/.dup-btn verbatim - no new CSS, correct in light mode by construction.
+    c.innerHTML=`<div class="dup-bar"><div><b>${cl.length}</b> people · ${[...mem.values()].reduce((s,a)=>s+a.length,0)} faces</div>
+        <div style="margin-left:auto"><button class="dup-btn" onclick="setView('list')">← Back to library</button></div></div>
+      <div class="faces-grid">`+cl.map(x=>{
+        const ms=mem.get(x.id),rep=ms.slice().sort((a,b)=>b.score-a.score).slice(0,4);
+        const nm=AIC.get(x.id)||'';
+        return `<div class="face-card" id="fc-${x.id}">
+          <div class="face-crops">${rep.map(r=>`<canvas class="face-crop" data-p="${esc(r.p)}" data-i="${r.i}"></canvas>`).join('')}</div>
+          <input class="face-name" value="${esc(nm)}" placeholder="+ add name"
+                 onchange="aiRenameCluster(${x.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+          <div class="ai-dim">${ms.length} photo${ms.length===1?'':'s'}</div>
+          <div class="face-acts">
+            <button class="dup-btn" onclick="aiSearchCluster(${x.id})">Show all</button>
+            <button class="dup-btn" onclick="aiMergePrompt(${x.id})">Merge…</button>
+            <button class="dup-btn" onclick="aiHideCluster(${x.id})">Not a person</button>
+          </div></div>`}).join('')+'</div>';
+    aiAttachCrops(c);
+}
+// Lazy crops, same IntersectionObserver shape as attachDupThumbs.
+function aiAttachCrops(root){
+    const io=new IntersectionObserver((es,o)=>{es.forEach(e=>{if(e.isIntersecting){o.unobserve(e.target);aiDrawCrop(e.target)}})},
+        {root:root.closest('.grid-scroll')||null,rootMargin:'300px'});
+    root.querySelectorAll('.face-crop').forEach(el=>io.observe(el));
+}
+async function aiDrawCrop(cv){
+    const p=cv.dataset.p,i=+cv.dataset.i,v=cache.get(p),h=fReg.get(p);
+    if(!v||!h||!v.faces||!v.faces[i])return;
+    try{
+        const b=v.faces[i].box,bmp=await createImageBitmap(await h.getFile());
+        const pad=Math.max(b[2],b[3])*0.35;
+        const x=Math.max(0,b[0]-pad),y=Math.max(0,b[1]-pad);
+        const w=Math.min(bmp.width-x,b[2]+pad*2),hh=Math.min(bmp.height-y,b[3]+pad*2);
+        cv.width=96;cv.height=96;
+        cv.getContext('2d').drawImage(bmp,x,y,w,hh,0,0,96,96);
+        bmp.close();
+    }catch(e){}
+}
+// Direct DOM update, never rend() - rend() calls clearURLs() and would blank every crop.
+function syncClusterUI(id){
+    const el=document.getElementById('fc-'+id);if(!el)return;
+    const inp=el.querySelector('.face-name');if(inp)inp.value=AIC.get(id)||'';
+}
+async function aiSaveMeta(){if(!aiMeta)return;aiMeta.clusters=(aiMeta.clusters||[]);await dPut(aiMeta)}
+async function aiRenameCluster(id,name){
+    if(!aiMeta)return;
+    const c=(aiMeta.clusters||[]).find(x=>x.id===id);if(!c)return;
+    c.name=(name||'').trim();AIC.set(id,c.name);
+    await aiSaveMeta();syncClusterUI(id);
+    showToast(c.name?`Named "${esc(c.name)}".`:'Name cleared.','success');
+}
+function aiSearchCluster(id){
+    const n=AIC.get(id);
+    const q='face:'+((n&&n.trim())?(/\s/.test(n)?'"'+n+'"':n):'person-'+id);
+    const i=document.getElementById('sIn');if(!i)return;
+    setView('list');i.value=q;i.classList.add('adv-on');setClearVis(true);scheduleSearch(q);
+}
+// Clustering reliably over-splits - the same person at a different angle lands in its own group -
+// so merging is the most-used action here, not an edge case.
+async function aiMergePrompt(id){
+    if(!aiMeta)return;
+    const mem=aiClusterMembers();
+    const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden&&mem.has(x.id));
+    if(!others.length){showToast('Nothing to merge into.','info');return}
+    const list=others.map(x=>`${x.id}: ${AIC.get(x.id)||'person-'+x.id} (${mem.get(x.id).length})`).join('\n');
+    const ans=prompt('Merge this person INTO which id?\n\n'+list);
+    if(ans===null)return;
+    const tgt=parseInt(ans,10);
+    if(!others.some(x=>x.id===tgt)){showToast('No such person id.','error');return}
+    const touched=[];
+    for(const[p,v]of cache){if(!v||!v.faces)continue;let hit=false;
+        v.faces.forEach(f=>{if(f.c===id){f.c=tgt;hit=true}});if(hit)touched.push(v)}
+    await dPutMany(touched);
+    aiMeta.clusters=(aiMeta.clusters||[]).filter(x=>x.id!==id);
+    AIC.delete(id);await aiSaveMeta();
+    showToast('Merged into '+esc(AIC.get(tgt)||('person-'+tgt))+'.','success');
+    rend();
+}
+async function aiHideCluster(id){
+    if(!aiMeta)return;
+    const c=(aiMeta.clusters||[]).find(x=>x.id===id);if(!c)return;
+    c.hidden=true;AIC.delete(id);await aiSaveMeta();rend();
+    showToast('Hidden from people.','info');
+}
+// --- /AI:FACES ---
+
+// ---- Cross-boundary contract. Everything below is called from existing code, so it must stay
+// ---- safe to invoke with no model loaded. See ai/CONTRACT.md.
+
+// Lifts sem:/like: terms out of the AST into `out` and leaves an always-true node behind, so the
+// boolean pass ignores them and semantic ranking composes with model:flux, -cat, favorites etc.
+// Pure AST work - no AI dependency, so this is live today.
+function advExtractSem(n,out,neg){
+    if(!n)return n;
+    if(n.t==='and'||n.t==='or')return{t:n.t,a:advExtractSem(n.a,out,neg),b:advExtractSem(n.b,out,neg)};
+    // A bare -sem: term must stay boolean-neutral. Left as not(true) it evaluates false for every
+    // item and empties the listing; the negation is the scorer's job, carried on the `neg` flag.
+    if(n.t==='not'){const a=advExtractSem(n.a,out,!neg);return a&&a.t==='true'?{t:'true'}:{t:'not',a}}
+    if(n.t==='term'&&n.field){
+        const k=FIELD_ALIAS[n.field]||n.field;
+        if(k==='sem'||k==='like'){out.push({kind:k,q:n.val,neg:!!neg});return{t:'true'}}
+    }
+    return n;
+}
+// The '__ai__' sentinel record, split out of the cache by dAll(). Clusters live library-global.
+function aiLoadMeta(rec){if(!rec||rec.p!=='__ai__')return;aiMeta=rec;AIC=new Map((rec.clusters||[]).map(c=>[c.id,c.name||'']))}
+// toggleAI / renderFaces / aiQueryVecs / aiScore / aiInvalidateMat are implemented in the marker
+// blocks above. They were stubs here during scaffolding; leaving both definitions would silently
+// re-stub the feature, because a later function declaration wins.
+const aiNeeds=it=>!!it&&!it.aiSkip&&(it.ai!==AIV);
+(function(){if(!aiOK()){const b=document.getElementById('aiBtn');if(b)b.classList.add('ai-off')}})();
+// =================== END AI SEARCH ===================
 </script></body></html>
