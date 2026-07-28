@@ -1,4 +1,4 @@
-# History Guru 🧘‍♂️ v4.5.0 (ChromeEdge Edition)
+# History Guru 🧘‍♂️ v4.6.0 (ChromeEdge Edition)
 
 > **The 100% Offline, Single-File File Manager & Metadata Viewer for AI Images.**
 
@@ -67,6 +67,16 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   **Animated PNG & WebP:** ComfyUI's `SaveAnimatedPNG` (`comf` chunks) and `SaveAnimatedWEBP` (EXIF tags) metadata is now extracted.
 *   **Safer "Fix & Save":** Animated GIF/WebP now prompt before flattening to a single frame, and non-image files are rejected before anything is written. Metadata editing stays images-only — rewriting a video container would corrupt it.
 
+### 🧠 On-Device AI Search *(optional)*
+*Search your library by **what the picture shows**, not just what the metadata says. Nothing leaves your machine.*
+
+*   **Semantic Search:** `sem:"a giraffe on a beach"` ranks the whole library by meaning, using CLIP image/text embeddings. Works on **video too** — five frames are sampled per clip and scored on the best match, so a two-second appearance in a sixty-second clip still finds it.
+*   **Find Similar:** `like:"folder1/x.png"` surfaces visually similar images. No inference needed — it reuses the image's own stored embedding, so it is instant.
+*   **Face Grouping:** Faces are detected, embedded and clustered. Name a person once in the **People** view and search `face:rob` forever after. Merging is one click, because clustering reliably over-splits the same person across lighting and angles.
+*   **Composes With Everything:** `sem:"portrait" model:flux -blurry` works exactly as you'd expect. Semantic terms rank; the normal filters still narrow.
+*   **Runs On Your NPU:** Uses **WebNN** via ONNX Runtime Web, which is the only browser API that can reach an NPU (WebGPU cannot). It probes NPU → GPU → WebGPU → CPU and picks what actually performs, rejecting any backend that returns garbage.
+*   **Opt-In and Reversible:** Analysis is an explicit button, cancellable and resumable; results cache to IndexedDB so it never redoes work. **Clear AI data** removes it all without touching your images.
+
 ---
 
 ## 🚀 How to Use
@@ -78,6 +88,43 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 2.  **Grant Permission:** Click **"Open Folder"** and select your directory. When the browser asks, click **"Edit"** or **"Allow"** to enable file management features.
 3.  **Organize:** Use the sidebar to create folders. Use `Shift+Click` to select groups and drag them into new locations.
 4.  **Edit:** Click any image to open the Inspector. Edit prompts or LoRAs and hit **"Fix & Save"** to overwrite the file on disk.
+
+---
+
+## 🧠 Enabling AI Search
+
+Everything above works by double-clicking the HTML. **AI search does not**, and that is a browser rule rather than a design choice: Chrome blocks WebNN, WebGPU *and* Web Workers on `file://` pages because it is not a secure context. `http://localhost` **is** one, so the app ships a tiny launcher.
+
+You need [Node.js](https://nodejs.org) (v18+) and about **500 MB** of disk for the models.
+
+**1 — Turn on WebNN in your browser.** Go to `chrome://flags` (or `edge://flags`), search for **WebNN**, set **"Enables WebNN API"** to **Enabled**, and restart the browser.
+
+> On Edge, NPU support may additionally need launching with `msedge.exe --disable_webnn_for_npu=0`.
+> On Windows you want **11 version 24H2 or newer** plus a current NPU driver. Without WebNN the app still works — it falls back to your GPU, just slower.
+
+**2 — Download the models (once).**
+
+```bash
+node fetch-models.mjs
+```
+
+Pulls the ONNX Runtime and four models (CLIP vision + text, a face detector, a face embedder) into `ai/`. Add `--int8` for a smaller ~155 MB CPU-only set. This is the *only* time anything is downloaded — all inference afterwards is local and offline.
+
+**3 — Start the launcher.**
+
+```bash
+node serve.mjs
+```
+
+Then open **http://127.0.0.1:8787**. It binds to localhost only and is not reachable from your network.
+
+**4 — Check your machine (optional).** Open **http://127.0.0.1:8787/ai-check.html** for a green/red report on secure context, WebNN, NPU, GPU and workers. If something is off, this says exactly what.
+
+**5 — Index your library.** Open your folder, click **🧠**, then **Analyze**. First run compiles the models (~20 s) before the counter moves. A few thousand images takes a while — it is cancellable and resumes where it left off.
+
+> **Heads-up:** `file://` and `http://127.0.0.1:8787` are **different origins**, so the metadata cache, favourites and folder permission do not carry across. The first launcher run rescans your library once. Keep the port at 8787 — changing it changes the origin and starts over.
+
+Opened the old way, the app behaves exactly as before, with the 🧠 button dimmed and explaining why.
 
 ---
 
@@ -95,6 +142,8 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 ---
 
 ## 🔧 Technical Architecture
+*   **WebNN + ONNX Runtime Web:** On-device inference with an NPU → GPU → WebGPU → CPU ladder, benchmarked at runtime and demoted if a backend compiles but silently offloads to CPU.
+*   **int8 Embeddings:** 512-d vectors stored quantized (512 bytes each, ~5 MB for 10k images) with a scale factor. Ranking is a flat cosine scan of one contiguous buffer — ~10 ms over 10k items, no vector index needed.
 *   **File System Access API:** Direct disk I/O for file moves and renames.
 *   **IndexedDB Caching:** Instant subsequent loads for thousands of images.
 *   **Virtual Scrolling & Pagination:** Near-zero lag when browsing massive collections, with lazy-loaded thumbnails.
@@ -110,6 +159,13 @@ MIT License - Free to use, modify, and distribute for the AI art community.
 ---
 
 ## 🚀 Version History
+
+### [4.6.0] - 2026-07-28
+*   **On-device AI search.** Semantic search (`sem:`), visual similarity (`like:`) and face grouping (`face:`), all running locally through WebNN — no cloud, no account, no upload.
+*   **People view** for naming and merging face clusters, reachable from the 🧠 panel.
+*   **`serve.mjs`** — a zero-dependency localhost launcher, because browsers block WebNN/WebGPU/Workers on `file://`. **`fetch-models.mjs`** downloads the models once.
+*   **`ai-check.html`** reports whether your machine and browser can actually run it.
+*   The app is still **one HTML file** and still works by double-click, with AI disabled and explaining why.
 
 ### [4.5.0] - 2026-07-26
 - **Video Metadata**: MP4/MOV/WebM/MKV metadata is now read from the container and parsed — prompts, model, seed, steps, CFG, sampler and LoRAs, plus true resolution from `tkhd`/`PixelWidth`. Supports ComfyUI/VHS node graphs and flat settings dicts (WanGP). Files are sliced, never buffered.

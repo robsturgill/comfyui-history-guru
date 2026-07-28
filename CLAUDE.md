@@ -11,7 +11,7 @@ would normally warrant a new module, add a clearly commented section instead.
 |---|---|
 | App file | [Guru Manager ChromeEdge Edition.html](Guru%20Manager%20ChromeEdge%20Edition.html) (~1275 lines) |
 | Test data | `samples/` — folder1, folder2, folder3, video |
-| Test data backup | `samples -backup/` — **never modify, never open in the app.** Restore `samples/` from here after destructive tests |
+| Test data | `samples/` is git-ignored and **has no backup**. Anything destructive (delete, `fixSave` conversion) is unrecoverable — copy the folder aside first if a test needs it |
 | Runtime | Chrome / Edge only (File System Access API). Runs from `file://` |
 
 ---
@@ -429,6 +429,72 @@ which is a much heavier and fuzzier feature. Not currently implemented.
 
 ---
 
+## On-device AI search (WebNN)
+
+Semantic search (`sem:"a giraffe on a beach"`) and face clustering (`face:rob`), running entirely on
+the local machine. **The app is still one HTML file** — the AI section lives in marker blocks at the
+end of the `<script>`. Weights and the ORT runtime are *data*, in the git-ignored `ai/`.
+
+### It cannot run from `file://`, and that is not fixable
+
+Chrome gates WebNN, WebGPU **and Web Workers** behind a secure context, and `file://` is not one. So:
+
+```bash
+node serve.mjs        # then open http://127.0.0.1:8787
+```
+
+Everything is behind `aiOK()`. Opened by double-click the app behaves **exactly as before**; the only
+delta is a dimmed 🧠 button. `localStorage['guru-ai']='off'` is a hard kill switch.
+
+**`file://` and `http://127.0.0.1:8787` are different origins.** IndexedDB, favorites and folder
+permissions do not carry over — the first launcher run rescans. Keep the port fixed; changing it
+changes the origin and wipes the index again.
+
+### Setup
+
+`node fetch-models.mjs` (once, ~500 MB) → `ai/ort/` + `ai/models/`. `--int8` for the smaller
+WASM-only set, `--force` to re-download.
+
+### Read `ai/CONTRACT.md` before touching any of this
+
+It is the frozen interface and it records several findings that are **not** guessable, all of which
+cost real debugging time:
+
+- **The CLIP text tower returns all-NaN on `webnn:npu`** (causal mask `Where` + `-inf`). It does not
+  throw. Vision runs on the NPU, **text must run on `webnn:gpu`**, and `clipText` is never
+  demotion-probed because plain `webgpu` is *semantically degenerate* while passing every
+  hard-failure check.
+- **The EP sanity gate's probe input must be realistically shaped.** A constant token fill has no
+  EOS, misses the degenerate path, and silently passed the broken NPU tower.
+- **`freeDims` must never default to 1.** Every CLIP axis is exported dynamic; all-ones compiles a
+  `1×1×1×1` graph that builds fine and emits garbage. `fetch-models.mjs` throws instead.
+- **WASM cannot load the fp16 models at all** — a WASM fallback needs int8 for *both* towers, and
+  mixing tiers breaks the shared embedding space.
+- **Only `/ai/ort/` and `/ai/models/*.onnx` are cache-immutable.** A broader rule pins
+  `manifest.json` and `ai-worker.js`, and your edits appear to do nothing.
+
+### Structure
+
+| Marker block | Contents |
+|---|---|
+| `AI:CSS` | All new styles. Colours from `--ai-ok/--ai-warn/--ai-bad/--ai-chip` only |
+| `AI:TOKENIZER` / `AI:PREPROC` | Verbatim copies of `ai/src/*.js`, which the worker also `importScripts` — **do not let them diverge**. Tested by `ai/src/*.test.mjs` in Node |
+| `AI:SEARCH` | Packed int8 matrix, `aiQueryVecs`, `aiScore`, `findSimilar` |
+| `AI:PANEL` | Panel, worker plumbing, batch job, video frame sampler |
+| `AI:FACES` | People view, rename, merge, hide |
+
+Cache items gain `ai` (a **plain number**, the `AIV` stamp), `emb`/`embS`, `embF`/`nF` for video,
+and `faces[]`. Library-global cluster state is a **reserved `__ai__` record inside store `"i"`** —
+the DB version stays 1 deliberately, because a bump would make an older copy of the HTML fail with
+`VersionError` → `alert("Access denied.")`. `dAll()` routes `_`-prefixed, extension-free keys to
+`aiLoadMeta`.
+
+Bump `AIV` when a model, its quantization, or preprocessing changes — `aiNeeds()` then re-analyzes
+without discarding any parsed image metadata.
+
+**No AI work happens in `scD()` or `proc()`.** Analysis is an explicit opt-in job, so opening a
+folder is exactly as fast as before.
+
 ## Conventions
 
 - Terse, minified-ish style: single-letter locals, chained ternaries, `document.getElementById`
@@ -447,4 +513,4 @@ which is a much heavier and fuzzier feature. Not currently implemented.
    ```
 2. Load in Chrome, open `samples/`, and confirm the feature works against real handles.
 3. Check **both themes** — light mode regressions are the most common miss.
-4. If a destructive test ran, restore `samples/` from `samples -backup/`.
+4. `samples/` has no backup — copy it aside before running anything destructive.

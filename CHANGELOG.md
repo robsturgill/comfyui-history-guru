@@ -2,6 +2,42 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [4.6.0] - 2026-07-28
+
+### Added
+- **🧠 On-Device AI Search**: Search by what the media *depicts*, not just its metadata. Everything runs locally — no cloud service, no upload, no account.
+  - **Semantic search** — `sem:"a giraffe on a beach"` ranks the library by CLIP image/text similarity. Composes with every existing filter (`sem:"portrait" model:flux -blurry`), because semantic terms are lifted out of the boolean AST and applied as a *ranking* rather than a predicate.
+  - **Visual similarity** — `like:"folder1/x.png"`. Runs no inference at all: the query vector is the item's own stored embedding.
+  - **Face grouping** — detect → embed → cluster, with a **People** view for naming and merging. Merge is a first-class action because clustering reliably over-splits the same person across lighting and angle.
+  - **Video is included** — five frames are sampled per clip and scored with `max()` over frames, never a pooled mean, so a two-second appearance in a sixty-second clip is still findable.
+- **🚀 `serve.mjs`**: A ~110-line zero-dependency localhost launcher. Sends COOP/COEP so the page is `crossOriginIsolated` (which unlocks multi-threaded WASM on the fallback path), binds `127.0.0.1` only, and fails loudly on a busy port rather than silently moving — the port is part of the origin, and a changed origin means a fresh IndexedDB.
+- **📦 `fetch-models.mjs`**: One-time model download (~500 MB, or ~155 MB with `--int8`). Reads each ONNX graph's real input protos to generate `manifest.json`, including the `freeDimensionOverrides` WebNN requires.
+- **🩺 `ai-check.html`**: Reports secure context, WebNN, NPU/GPU device availability and worker support, with a plain-English verdict.
+
+### Notes
+- **AI features cannot run from `file://`.** Chrome gates WebNN, WebGPU *and* Web Workers behind a secure context. `http://localhost` qualifies; a local file does not. This is why the launcher exists. Opened by double-click the app is byte-for-byte unchanged in behaviour, with the 🧠 button dimmed and explaining why.
+- **WebNN needs `chrome://flags` → "Enables WebNN API".** Without it the app degrades to WebGPU, then CPU.
+- **`file://` and `http://127.0.0.1:8787` are different origins**, so the metadata cache, favourites and folder permissions do not carry across. One rescan is expected on the first launcher run.
+
+### Findings worth recording
+These cost real debugging time and are not guessable from documentation:
+- **The CLIP text tower returns all-NaN on the NPU.** Its causal attention mask is a `Where` feeding `-inf`, which WebNN turns into NaN. It does **not** throw — the session compiles and benchmarks fast. Vision runs on the NPU; text is pinned to `webnn:gpu`.
+- **A backend sanity gate is only as good as its probe input.** The gate fed a constant token fill, which has no EOS — and CLIP pools at the `argmax(EOS)` position, so the degenerate path was never taken and the broken tower passed. It now probes with a realistically shaped `[BOS … EOS]` + padding sequence.
+- **Speed-based demotion is dangerous for the text tower.** Plain WebGPU passes every hard-failure check (finite, non-constant, input-sensitive) while being semantically degenerate — it returned the same image for "a photograph of a person", "a cat or a dog" and "a city street at night". The text tower is therefore never demotion-probed.
+- **`freeDimensionOverrides` must never default to 1.** These exporters mark *every* axis dynamic, so an all-ones default compiles CLIP vision as `1×1×1×1` — which builds successfully and emits garbage. `fetch-models.mjs` now throws on an unlisted axis instead.
+- **WASM cannot load the fp16 models at all.** A CPU fallback must use int8 for *both* CLIP towers; mixing precision tiers breaks the shared embedding space.
+- **Cache headers are load-bearing.** Only `/ai/ort/` and `/ai/models/*.onnx` are immutable. A broader rule pinned `manifest.json` and `ai-worker.js` for a year, so edits appeared to do nothing and the app ran against a stale graph shape.
+
+### Changed
+- `dAll()` routes `_`-prefixed, extension-free keys to the AI metadata loader instead of the file cache, so library-global cluster state lives in the existing store. **The IndexedDB version deliberately stays at 1** — a bump would make an older copy of the HTML fail with `VersionError`, surfacing as `alert("Access denied.")` with no way back.
+- `runSearch()` takes a sequence token and re-checks it after every `await`. The text encoder introduces async work inside a 160 ms debounce, so overlapping searches were guaranteed to land stale results otherwise.
+- `applySort()` gained a `relevance` branch; `opD()` and `clearSearch()` restore the previous sort when leaving it, since neither assigns scores.
+- Added `dPutMany()` — a 10k-item analysis run was 10k IndexedDB transactions.
+- Help now documents `sem:`, `like:` and `face:`. `Esc` closes the AI panel.
+
+### Removed
+- References to a `samples -backup/` directory, which never existed. `samples/` has no backup; copy it aside before running anything destructive.
+
 ## [4.5.0] - 2026-07-26
 
 ### Added
