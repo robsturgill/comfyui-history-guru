@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Guru AI — capability check</title>
+<style>
+:root{--bg:#09090b;--card:#18181b;--bd:#27272a;--txt:#e4e4e7;--mut:#a1a1aa;--acc:#8b5cf6;
+      --ok:#4ade80;--warn:#fbbf24;--bad:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;padding:32px;line-height:1.5}
+h1{font-size:1.3rem;margin:0 0 4px}h1 span{color:var(--acc)}
+.sub{color:var(--mut);font-size:.85rem;margin-bottom:24px}
+.origin{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;
+        font-family:ui-monospace,monospace;font-size:.85rem;margin-bottom:20px;word-break:break-all}
+table{border-collapse:collapse;width:100%;max-width:820px;background:var(--card);
+      border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+td{padding:9px 14px;border-bottom:1px solid var(--bd);font-size:.88rem;vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{width:230px;color:var(--mut)}
+td:last-child{color:var(--mut);font-size:.8rem}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}.warn{color:var(--warn);font-weight:600}
+h2{font-size:.95rem;margin:26px 0 8px}
+#verdict{margin-top:24px;max-width:820px;background:var(--card);border:1px solid var(--bd);
+         border-left:3px solid var(--acc);border-radius:8px;padding:14px 18px;font-size:.88rem}
+code{background:#000;padding:1px 6px;border-radius:4px;font-size:.85em}
+</style></head><body>
+<h1>Guru <span>AI</span> — capability check</h1>
+<div class="sub">Open this from <b>file://</b> and again from <b>http://127.0.0.1:8787/ai-check.html</b> and compare.</div>
+<div class="origin" id="org"></div>
+
+<h2>Platform</h2>
+<table id="t1"></table>
+<h2>WebNN devices</h2>
+<table id="t2"></table>
+<div id="verdict">Running…</div>
+
+<script>
+const org=document.getElementById('org');
+org.textContent=`origin: ${location.origin}   protocol: ${location.protocol}`;
+
+const row=(t,label,state,note)=>{
+    const cls=state===true?'ok':state===false?'bad':'warn';
+    const txt=state===true?'yes':state===false?'no':state;
+    t.insertAdjacentHTML('beforeend',
+        `<tr><td>${label}</td><td class="${cls}">${txt}</td><td>${note||''}</td></tr>`);
+};
+
+(async()=>{
+    const t1=document.getElementById('t1'), t2=document.getElementById('t2');
+
+    const sec=window.isSecureContext;
+    row(t1,'isSecureContext',sec,'Gates WebNN, WebGPU and workers');
+    row(t1,'crossOriginIsolated',!!window.crossOriginIsolated,'Needed for multi-threaded WASM');
+    row(t1,'navigator.ml (WebNN)',!!navigator.ml,
+        navigator.ml?'':'Enable chrome://flags → "Enables WebNN API"');
+    row(t1,'navigator.gpu (WebGPU)',!!navigator.gpu,'');
+
+    // WebGPU adapter
+    if(navigator.gpu){
+        try{const a=await navigator.gpu.requestAdapter();
+            row(t1,'WebGPU adapter',!!a,a?(a.info&&a.info.description)||'':'requestAdapter returned null')}
+        catch(e){row(t1,'WebGPU adapter',false,e.message)}
+    }else row(t1,'WebGPU adapter',false,'no navigator.gpu');
+
+    // Workers - blocked on file://
+    try{
+        const b=new Blob(['self.onmessage=()=>postMessage(1)'],{type:'text/javascript'});
+        const w=new Worker(URL.createObjectURL(b));
+        await new Promise((res,rej)=>{w.onmessage=res;w.onerror=e=>rej(new Error(e.message||'blocked'));
+            w.postMessage(0);setTimeout(()=>rej(new Error('timeout')),2000)});
+        w.terminate();row(t1,'Web Worker',true,'');
+    }catch(e){row(t1,'Web Worker',false,e.message)}
+
+    row(t1,'OffscreenCanvas',typeof OffscreenCanvas!=='undefined','');
+    row(t1,'createImageBitmap',typeof createImageBitmap!=='undefined','');
+    row(t1,'storage.persist',!!(navigator.storage&&navigator.storage.persist),'');
+
+    // WebNN device tiers - each probed independently, none may throw out.
+    let npu=false,gpu=false;
+    if(navigator.ml){
+        for(const d of ['npu','gpu','cpu']){
+            try{ await navigator.ml.createContext({deviceType:d});
+                 row(t2,`deviceType: ${d}`,true,'');
+                 if(d==='npu')npu=true; if(d==='gpu')gpu=true }
+            catch(e){ row(t2,`deviceType: ${d}`,false,e.message) }
+        }
+    }else row(t2,'—','n/a','navigator.ml absent; nothing to probe');
+
+    const v=document.getElementById('verdict');
+    let msg;
+    if(!sec) msg=`<b class="bad">No secure context.</b> AI features cannot run here. This is the expected result for file://. Run <code>node serve.mjs</code> and open <code>http://127.0.0.1:8787/ai-check.html</code>.`;
+    else if(npu) msg=`<b class="ok">NPU available.</b> The full ladder is open: WebNN NPU → WebNN GPU → WebGPU → WASM. This is the best case for your Lunar Lake hardware.`;
+    else if(gpu) msg=`<b class="warn">WebNN present, but no NPU context.</b> Falls back to WebNN GPU. Check the Intel NPU driver, and on Edge try launching with <code>--disable_webnn_for_npu=0</code>.`;
+    else if(navigator.gpu) msg=`<b class="warn">No WebNN.</b> Plan still works via WebGPU — slower than NPU but far better than CPU. Enable <code>chrome://flags → "Enables WebNN API"</code> and retest.`;
+    else msg=`<b class="bad">Neither WebNN nor WebGPU.</b> Only the WASM fallback is available; a full library pass would be very slow.`;
+    v.innerHTML=msg;
+})();
+</script>
+</body></html>

@@ -46,5 +46,15 @@ backup/
 
 # Local test data (never commit)
 samples/
-samples -backup/
 docs/
+
+# On-device AI. Only the DOWNLOADED payloads are ignored - ai/ai-worker.js, ai/src/ and
+# ai/CONTRACT.md are hand-written source and must be committed, or a fresh clone has no worker
+# and AI search cannot run at all. Note a blanket `ai/` cannot be undone with `!ai/src/**`:
+# git never descends into an excluded directory, so the re-includes are silently ignored.
+# (gitignore has no trailing comments - a pattern with one becomes a literal and matches nothing)
+# ONNX Runtime Web ~28MB, and ONNX weights ~470MB, both from fetch-models.mjs:
+ai/ort/
+ai/models/
+# scratch verification pages, not part of the app:
+ai/diagnostics/
