@@ -117,6 +117,8 @@ body.mode-detail .inspector{position:relative;transform:none;border-left:1px sol
 .lora-btn{padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.8rem;border:1px solid var(--bd);background:var(--card);color:var(--txt)}
 .lora-btn:hover{background:var(--bd)}
 .bot-bar{display:flex;gap:10px}.btn-full{flex:1;padding:12px;border-radius:8px;background:var(--bd);color:var(--txt);border:none;cursor:pointer;font-weight:600}.btn-pri{background:var(--acc);color:#fff}
+    .btn-dang{flex:0 0 auto;padding:12px 18px;background:transparent;border:1px solid var(--ai-bad);color:var(--ai-bad)}
+    .btn-dang:hover{background:var(--ai-bad);color:#fff}
 .overlay{position:fixed;inset:0;background:rgba(9,9,11,0.95);z-index:5000;display:flex;flex-direction:column;align-items:center;justify-content:center}.hidden{display:none}
 .spin{width:40px;height:40px;border:4px solid #333;border-top-color:var(--acc);border-radius:50%;animation:s 1s linear infinite;margin-bottom:20px}@keyframes s{to{transform:rotate(360deg)}}
 body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mode-list .detail-layer{display:none}
@@ -347,7 +349,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
                 <div id="loraEditor"></div>
             </div>
             <div><span class="lbl">Resources</span><div id="mRes"></div></div>
-            <div class="bot-bar"><button class="btn-full" onclick="viewJSON()" title="View the embedded workflow / metadata">JSON</button><button class="btn-full btn-pri" onclick="fixSave()">Fix & Save</button></div>
+            <div class="bot-bar"><button class="btn-full" onclick="viewJSON()" title="View the embedded workflow / metadata">JSON</button><button class="btn-full btn-pri" onclick="fixSave()">Fix & Save</button><button class="btn-full btn-dang" onclick="deleteFromDetail()" title="Delete this file">🗑</button></div>
         </div>
     </aside>
 </div>
@@ -1878,6 +1880,17 @@ async function upDet(){
     }
     pop(f,mt);
 }
+// Deleting the image on screen: the next one slides into the slot aIdx already points at, so the
+// viewer stays open and simply shows it. Only an empty list or a delete at the very end move aIdx.
+async function deleteFromDetail(){
+    if(aIdx<0||aIdx>=cFiles.length)return;
+    const r=await confirmDelete([cFiles[aIdx].p]);
+    if(!r||!r.gone.length)return;
+    if(!cFiles.length){aIdx=-1;exitDetail();return}
+    if(aIdx>=cFiles.length)aIdx=cFiles.length-1;
+    ensurePageFor(aIdx);
+    upDet();
+}
 function toggleFavoriteFromDetail(){
     if(aIdx<0||aIdx>=cFiles.length)return;
     const f=cFiles[aIdx];
@@ -1947,7 +1960,7 @@ document.addEventListener('keydown',e=>{
     if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT'){
         if(e.key==='Escape'){const ap=document.getElementById('advPanel');if(ap&&!ap.classList.contains('hidden'))toggleAdvSearch();e.target.blur();hideHelp()}
         return}
-    if(document.body.classList.contains('mode-detail')){if(e.key==='ArrowRight')nav(1);if(e.key==='ArrowLeft')nav(-1);if(e.key==='Escape')exitDetail();return}
+    if(document.body.classList.contains('mode-detail')){if(e.key==='ArrowRight')nav(1);if(e.key==='ArrowLeft')nav(-1);if(e.key==='Escape')exitDetail();if(e.key==='Delete'){e.preventDefault();deleteFromDetail()}return}
     if(e.key==='?'||(e.shiftKey&&e.key==='?')){e.preventDefault();showHelp();return}
     if(e.key==='Escape'){
         if(selectedItems.size > 0){ selectedItems.clear(); selectedIndex = -1; rend(); return; }
