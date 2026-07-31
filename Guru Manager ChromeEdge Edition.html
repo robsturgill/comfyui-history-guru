@@ -1497,6 +1497,10 @@ async function deleteMarkedDuplicates(){
 // Folders are not handled here - they change the tree, so contextDelete() still rescans for those.
 async function deletePaths(paths){
     const gone=[],fail=[];
+    // "Select all" can put the whole library in here, and each file is a sequential await on the
+    // filesystem plus IndexedDB - same reason deleteMarkedDuplicates() raises the overlay.
+    const busy=paths.length>1;
+    if(busy)document.getElementById('load').classList.remove('hidden');
     for(const p of paths){
         try{
             const name=p.split('/').pop();
@@ -1508,6 +1512,7 @@ async function deletePaths(paths){
             gone.push(p)
         }catch(e){console.error('Delete failed for',p,e);fail.push(p)}
     }
+    if(busy)document.getElementById('load').classList.add('hidden');
     if(gone.length){
         aiInvalidateMat();
         localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));
@@ -1963,7 +1968,9 @@ async function deleteFromDetail(){
     if(!r||!r.gone.length)return;
     if(!cFiles.length){aIdx=-1;exitDetail();return}
     if(aIdx>=cFiles.length)aIdx=cFiles.length-1;
-    ensurePageFor(aIdx);
+    // Deliberately no ensurePageFor() here. exitDetail() owns following the viewer back to its
+    // page, and it only re-renders when ensurePageFor() reports a change - moving curPage now
+    // would make that check pass silently and drop the user on a stale grid with a dead pager.
     upDet();
 }
 function toggleFavoriteFromDetail(){
