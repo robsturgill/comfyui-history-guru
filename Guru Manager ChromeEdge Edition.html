@@ -16,7 +16,12 @@
     .tree::-webkit-scrollbar{width:9px}
     .tree::-webkit-scrollbar-track{background:transparent}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:background-color 0.3s ease,color 0.3s ease}
-header{height:60px;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;background:var(--head);gap:16px;z-index:50}
+header{min-height:60px;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;background:var(--head);gap:16px;z-index:50;flex-wrap:wrap;row-gap:8px}
+    /* Groups every control right of the search box so they compact - and, at the narrowest
+       breakpoint, wrap - as one unit instead of individually falling off the right edge. */
+    .head-tools{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+    .head-sep{width:1px;height:24px;background:var(--bd);flex-shrink:0}
+    .btn-short,.tb-icon{display:none}
 h1{font-size:1.1rem;font-weight:800;margin:0;white-space:nowrap}h1 span{color:var(--acc)}
 .s-box{flex:1;min-width:210px;max-width:500px;position:relative}
 /* Left padding used to be 36px for a search icon that was never in the markup. */
@@ -99,7 +104,7 @@ h1{font-size:1.1rem;font-weight:800;margin:0;white-space:nowrap}h1 span{color:va
 .detail-favorite-star:hover{background:rgba(0,0,0,0.8);transform:scale(1.1)}
 .detail-favorite-star.favorited{background:rgba(251,191,36,0.3);border-color:#fbbf24}
 .inspector{width:400px;background:var(--side);border-left:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;z-index:3000;transition:transform 0.3s}
-body.mode-list .inspector{position:fixed;right:0;top:60px;bottom:0;transform:translateX(100%)} body.mode-list .inspector.open{transform:translateX(0)}
+body.mode-list .inspector{position:fixed;right:0;top:var(--head-h,60px);bottom:0;transform:translateX(100%)} body.mode-list .inspector.open{transform:translateX(0)}
 body.mode-detail .inspector{position:relative;transform:none;border-left:1px solid var(--bd)}
 .insp-head{height:60px;padding:0 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;background:var(--head);flex-shrink:0}
 .insp-scroll{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
@@ -139,6 +144,35 @@ body.sel-mode .sel-cb{display:block}
    to stay aligned with .list-head, so an inline checkbox would push the thumbnail out of it. */
 .list-cell1{position:relative;display:flex;align-items:center;min-width:0;height:100%}
 .list-cell1 .sel-cb{position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:12;box-shadow:0 0 0 2px var(--card)}
+/* RESPONSIVE HEADER. The header holds ~12 controls and at full size needs ~1180px; below that the
+   icons used to run off the right edge and simply vanish (nothing scrolls or wraps there). These
+   tiers shed the widest, least informative things first - labels before icons, icons never - so
+   every control stays reachable. --head-h is measured by a ResizeObserver, not hardcoded, because
+   the inspector is pinned below the header and the header's height changes when it wraps. */
+@media (max-width:1240px){
+    header{gap:10px;padding:0 12px}
+    .head-tools{gap:6px}
+    .s-box{min-width:150px}
+    /* Label goes, but keep the button a full-size tap target like its icon neighbours - and swap
+       in an icon, because the state dot on its own reads as nothing at all. */
+    .thumb-btn{min-width:36px;justify-content:center;padding:8px 8px;gap:3px}
+    .thumb-btn .tb-text{display:none}
+    .thumb-btn .tb-icon{display:inline}
+}
+@media (max-width:1000px){
+    h1{display:none}                                   /* the tab title already says what this is */
+    .btn-long{display:none}.btn-short{display:inline}
+    .btn{padding:8px 11px}
+}
+@media (max-width:760px){
+    /* Out of horizontal room: search takes its own row, tools spread across the one below. */
+    header{padding:8px 12px}
+    .s-box{order:2;flex:1 1 100%;max-width:none;min-width:0}
+    /* Below ~450px even the icon row alone overruns, so let it wrap too. Nothing needs a magic
+       height for that - the ResizeObserver feeding --head-h follows however tall it ends up. */
+    .head-tools{order:3;width:100%;margin-left:0;justify-content:center;flex-wrap:wrap;gap:6px}
+    .head-sep{display:none}
+}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;display:flex;align-items:center;gap:12px;min-width:250px;animation:toastSlide 0.3s ease}.toast.success{border-left:4px solid #4ade80}.toast.error{border-left:4px solid #ef4444}.toast.info{border-left:4px solid var(--acc)}@keyframes toastSlide{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .context-menu{position:fixed;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 0;min-width:150px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none}.context-menu-item{padding:8px 16px;cursor:pointer;color:var(--txt);font-size:0.85rem}.context-menu-item:hover{background:var(--side)}.context-menu-item.disabled{opacity:0.5;cursor:not-allowed}
 /* DUPLICATES VIEW */
@@ -283,19 +317,21 @@ body.sel-mode .sel-cb{display:block}
             </div>
         </div>
     </div>
-    <button class="btn" onclick="initFileSystem()">Open Folder</button>
-    <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt)" onclick="fullScan()">↻</button>
-    <div style="width:1px;height:24px;background:var(--bd)"></div>
+    <div class="head-tools">
+    <button class="btn" onclick="initFileSystem()" title="Open Folder"><span class="btn-long">Open Folder</span><span class="btn-short">📂</span></button>
+    <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt)" onclick="fullScan()" title="Refresh">↻</button>
+    <div class="head-sep"></div>
     <button id="bStats" class="btn-icon" onclick="toggleStats()" title="Metadata Statistics">📊</button>
     <button id="viewToggle" class="btn-icon" onclick="toggleView()" title="Toggle Grid/List">🔲</button>
     <button id="selModeBtn" class="btn-icon" onclick="toggleSelectMode()" title="Selection mode — click items to select without holding a key">☑</button>
-    <button id="thumbToggle" class="thumb-btn" onclick="toggleThumbnails()" title="Toggle Thumbnails">Thumbnails <span id="thumbIndicator" class="thumb-dot" style="color: #4ade80;">●</span></button>
+    <button id="thumbToggle" class="thumb-btn" onclick="toggleThumbnails()" title="Toggle Thumbnails"><span class="tb-text">Thumbnails</span><span class="tb-icon">🖼</span> <span id="thumbIndicator" class="thumb-dot" style="color: #4ade80;">●</span></button>
     <button id="themeToggle" class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">🌙</button>
     <button id="helpBtn" class="btn-icon" onclick="showHelp()" title="Help & Shortcuts">❓</button>
     <button id="dupBtn" class="btn-icon" onclick="findDuplicates()" title="Find Duplicates">🔍</button>
     <button id="aiBtn" class="btn-icon" onclick="toggleAI()" title="AI Search">🧠</button>
     <button id="peopleBtn" class="btn-icon" onclick="showPeople()" title="Review people">👥</button>
     <button id="favFilterBtn" class="btn-icon" onclick="toggleFavoritesFilter()" title="Show Only Favorites">⭐</button>
+    </div>
 </header>
 <div class="layout">
     <aside id="sidebar" class="sidebar">
@@ -1194,6 +1230,14 @@ function toggleStats(){setView(vMode==='stats'?'list':'stats')}
 function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);const dispSize=item.dim||meta.size;if(dispSize&&dispSize!=="?")stats.sizes.set(dispSize,(stats.sizes.get(dispSize)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
 function toggleTheme(){const body=document.body;const currentTheme=body.getAttribute('data-theme')||'dark';const newTheme=currentTheme==='dark'?'light':'dark';body.setAttribute('data-theme',newTheme);localStorage.setItem('guru-theme',newTheme);const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=newTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${newTheme==='dark'?'Light':'Dark'} Mode`}}
 function toggleThumbnails(){const isOff=document.body.classList.toggle('no-thumbnails');if(isOff&&vMode==='grid')setView('list');localStorage.setItem('guru-thumbnails',isOff?'off':'on');updateThumbUI(!isOff);rend()}
+// The inspector is pinned directly below the header (top:var(--head-h)). The header wraps to two
+// rows on a narrow viewport, so its height is measured rather than hardcoded - a magic number here
+// drifts the moment a button, font size or zoom level changes.
+(function(){
+    const h=document.querySelector('header');if(!h||!window.ResizeObserver)return;
+    const sync=()=>document.documentElement.style.setProperty('--head-h',h.offsetHeight+'px');
+    new ResizeObserver(sync).observe(h);sync();
+})();
 function updateThumbUI(show){const indicator=document.getElementById('thumbIndicator');if(indicator)indicator.style.color=show?'#4ade80':'#ef4444'}
 function updateThumbSize(val){document.documentElement.style.setProperty('--thumb-size',val+'px');localStorage.setItem('guru-thumb-size',val)}
 (function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}setTimeout(syncSortUI,0)})();
