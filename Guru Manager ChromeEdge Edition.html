@@ -242,6 +242,10 @@ body.sel-mode .sel-cb{display:block}
 .face-name:focus{border-color:var(--acc)}
 .face-acts{display:flex;gap:5px;flex-wrap:wrap}
 .face-acts .dup-btn{font-size:0.72rem;padding:3px 7px}
+.person-chip{cursor:pointer}
+.person-chip:hover{border-color:var(--acc);color:var(--acc)}
+.face-id{font-family:monospace;color:var(--chip-txt);background:var(--ai-chip);border-radius:4px;padding:1px 5px;cursor:pointer}
+.face-id:hover{color:var(--acc)}
 /* --- /AI:CSS --- */
 </style>
 </head>
@@ -290,6 +294,7 @@ body.sel-mode .sel-cb{display:block}
     <button id="helpBtn" class="btn-icon" onclick="showHelp()" title="Help & Shortcuts">❓</button>
     <button id="dupBtn" class="btn-icon" onclick="findDuplicates()" title="Find Duplicates">🔍</button>
     <button id="aiBtn" class="btn-icon" onclick="toggleAI()" title="AI Search">🧠</button>
+    <button id="peopleBtn" class="btn-icon" onclick="showPeople()" title="Review people">👥</button>
     <button id="favFilterBtn" class="btn-icon" onclick="toggleFavoritesFilter()" title="Show Only Favorites">⭐</button>
 </header>
 <div class="layout">
@@ -373,6 +378,7 @@ body.sel-mode .sel-cb{display:block}
                 </div>
                 <div id="loraEditor"></div>
             </div>
+            <div id="mPeopleWrap" style="display:none"><span class="lbl">People</span><div id="mPeople"></div></div>
             <div><span class="lbl">Resources</span><div id="mRes"></div></div>
             <div class="bot-bar"><button class="btn-full" onclick="viewJSON()" title="View the embedded workflow / metadata">JSON</button><button class="btn-full btn-pri" onclick="fixSave()">Fix & Save</button><button class="btn-full btn-dang" onclick="deleteFromDetail()" title="Delete this file">🗑</button></div>
         </div>
@@ -1182,7 +1188,7 @@ async function backfillDim(h,p){const it=cache.get(p);
     if(!it||it.dim!==undefined)return;
     try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
 
-function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const aiB=document.getElementById('aiBtn');if(aiB)aiB.classList.toggle('active',m==='faces');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
+function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const pB=document.getElementById('peopleBtn');if(pB)pB.classList.toggle('active',m==='faces');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
 function toggleView(){setView(vMode==='grid'?'list':'grid')}
 function toggleStats(){setView(vMode==='stats'?'list':'stats')}
 function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);const dispSize=item.dim||meta.size;if(dispSize&&dispSize!=="?")stats.sizes.set(dispSize,(stats.sizes.get(dispSize)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
@@ -1560,7 +1566,7 @@ async function contextDelete(){
         showToast('Deleted successfully','success')
     }catch(e){showToast('Delete failed: '+e.message,'error')}
 }
-function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete the selection, or the open image</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div><div><strong>☑ Selection mode</strong> Click to select, no key held</div><div><strong>Double-click</strong> Open an image in selection mode</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
+function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete the selection, or the open image</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div><div><strong>☑ Selection mode</strong> Click to select, no key held</div><div><strong>Double-click</strong> Open an image in selection mode</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>👥 People</strong> Review face groups (needs the launcher)</div><div><strong>☑ Selection</strong> Multi-select, then delete the lot</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
@@ -2008,8 +2014,22 @@ function pop(f,mt){
         s.innerHTML = `<span>${x.type}</span>${x.name}${x.str ? ` <span class="chip-badge">${x.str}</span>` : ""}`;
         b.appendChild(s)
     });
+    popPeople(mt);
     if(document.body.classList.contains('mode-list'))togInsp(true);
 }
+// Who the face clusterer found in this image. One image can hold several detections of the same
+// person, so the ids are de-duplicated; c<0 is the noise bucket and is not a person yet.
+function popPeople(mt){
+    const wrap=document.getElementById('mPeopleWrap'),box=document.getElementById('mPeople');
+    if(!wrap||!box)return;
+    const ids=[...new Set(((mt&&mt.faces)||[]).map(x=>x.c).filter(c=>c>=0))];
+    if(!aiOK()||!ids.length){wrap.style.display='none';box.innerHTML='';return}
+    box.innerHTML=ids.map(c=>`<span class="chip person-chip" onclick="peopleFromDetail(${c})" title="Show every photo of this person">${esc(AIC.get(c)||('person-'+c))}<span class="chip-badge">id ${c}</span></span>`).join('');
+    wrap.style.display='';
+}
+// exitDetail() first: aiSearchCluster() calls setView('list') -> rend(), which would otherwise
+// rebuild the grid behind a detail overlay that is still up.
+function peopleFromDetail(id){exitDetail();aiSearchCluster(id)}
 function nav(d){const n=aIdx+d;if(n>=0&&n<cFiles.length){aIdx=n;upDet()}}
 document.addEventListener('keydown',e=>{
     // Checked before the input guard below: the JSON dialog's search box is an <input>, so Escape
@@ -3278,7 +3298,7 @@ function renderFaces(c){
           <div class="face-crops">${rep.map(r=>`<canvas class="face-crop" data-p="${esc(r.p)}" data-i="${r.i}"></canvas>`).join('')}</div>
           <input class="face-name" value="${esc(nm)}" placeholder="+ add name"
                  onchange="aiRenameCluster(${x.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-          <div class="ai-dim">${ms.length} photo${ms.length===1?'':'s'}</div>
+          <div class="ai-dim">${ms.length} photo${ms.length===1?'':'s'} · <span class="face-id" onclick="aiCopyId(${x.id})" title="Person id — the number Merge… asks for. Click to copy.">id ${x.id}</span></div>
           <div class="face-acts">
             <button class="dup-btn" onclick="aiSearchCluster(${x.id})">Show all</button>
             <button class="dup-btn" onclick="aiMergePrompt(${x.id})">Merge…</button>
@@ -3310,6 +3330,12 @@ function syncClusterUI(id){
     const el=document.getElementById('fc-'+id);if(!el)return;
     const inp=el.querySelector('.face-name');if(inp)inp.value=AIC.get(id)||'';
 }
+// The id is what aiMergePrompt() asks the user to type, so it has to be visible on the card and
+// easy to get hold of. Clipboard access can be refused, in which case the number is still readable.
+function aiCopyId(id){
+    if(navigator.clipboard&&navigator.clipboard.writeText)
+        navigator.clipboard.writeText(String(id)).then(()=>showToast(`Copied person id ${id}.`,'success'),()=>{});
+}
 async function aiSaveMeta(){if(!aiMeta)return;aiMeta.clusters=(aiMeta.clusters||[]);await dPut(aiMeta)}
 async function aiRenameCluster(id,name){
     if(!aiMeta)return;
@@ -3318,11 +3344,19 @@ async function aiRenameCluster(id,name){
     await aiSaveMeta();syncClusterUI(id);
     showToast(c.name?`Named "${esc(c.name)}".`:'Name cleared.','success');
 }
+// "Show all" leaves the people view for a search, so there has to be a way back that isn't
+// "start over". The 👥 header button is always there, and the faces view keeps its own state -
+// nothing is recomputed, so returning is instant.
+function showPeople(){
+    if(!aiOK()){showToast('People need the local launcher — run node serve.mjs.','info');return}
+    setView('faces');
+}
 function aiSearchCluster(id){
     const n=AIC.get(id);
     const q='face:'+((n&&n.trim())?(/\s/.test(n)?'"'+n+'"':n):'person-'+id);
     const i=document.getElementById('sIn');if(!i)return;
     setView('list');i.value=q;i.classList.add('adv-on');setClearVis(true);scheduleSearch(q);
+    showToast('Showing every photo of this person. 👥 in the toolbar goes back.','info');
 }
 // Clustering reliably over-splits - the same person at a different angle lands in its own group -
 // so merging is the most-used action here, not an edge case.
@@ -3332,7 +3366,8 @@ async function aiMergePrompt(id){
     const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden&&mem.has(x.id));
     if(!others.length){showToast('Nothing to merge into.','info');return}
     const list=others.map(x=>`${x.id}: ${AIC.get(x.id)||'person-'+x.id} (${mem.get(x.id).length})`).join('\n');
-    const ans=prompt('Merge this person INTO which id?\n\n'+list);
+    const me=AIC.get(id)||('person-'+id);
+    const ans=prompt(`Merge "${me}" (id ${id}) INTO which id?\n\nEvery face here moves to the person you pick, and this card goes away.\nThe id is also shown on each card.\n\n`+list);
     if(ans===null)return;
     const tgt=parseInt(ans,10);
     if(!others.some(x=>x.id===tgt)){showToast('No such person id.','error');return}
@@ -3377,6 +3412,6 @@ function aiLoadMeta(rec){if(!rec||rec.p!=='__ai__')return;aiMeta=rec;AIC=new Map
 // blocks above. They were stubs here during scaffolding; leaving both definitions would silently
 // re-stub the feature, because a later function declaration wins.
 const aiNeeds=it=>!!it&&!it.aiSkip&&(it.ai!==AIV);
-(function(){if(!aiOK()){const b=document.getElementById('aiBtn');if(b)b.classList.add('ai-off')}})();
+(function(){if(!aiOK())['aiBtn','peopleBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.add('ai-off')})})();
 // =================== END AI SEARCH ===================
 </script></body></html>
