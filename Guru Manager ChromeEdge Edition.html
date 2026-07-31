@@ -1456,10 +1456,83 @@ async function deleteMarkedDuplicates(){
     await opD(cDir,currP)
 }
 // =================== END DUPLICATE DETECTION ===================
+
+// ===================== SHARED FILE DELETE =====================
+// Every file deletion routes through here. It is deliberately NOT followed by fullScan()/opD():
+// both rebuild cFiles from fReg, which throws away an active search while leaving the query sitting
+// in the box. Removing the rows from cFiles directly keeps the search, sort and page intact.
+// Folders are not handled here - they change the tree, so contextDelete() still rescans for those.
+async function deletePaths(paths){
+    const gone=[],fail=[];
+    for(const p of paths){
+        try{
+            const name=p.split('/').pop();
+            const parentPath=p.includes('/')?p.substring(0,p.lastIndexOf('/')):"";
+            const parentHandle=(parentPath?dReg.get(parentPath):null)||rH;
+            await parentHandle.removeEntry(name);
+            fReg.delete(p);cache.delete(p);await dDel(p);
+            selectedItems.delete(p);favorites.delete(p);
+            gone.push(p)
+        }catch(e){console.error('Delete failed for',p,e);fail.push(p)}
+    }
+    if(gone.length){
+        aiInvalidateMat();
+        localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));
+        const dead=new Set(gone);
+        cFiles=cFiles.filter(f=>!dead.has(f.p));
+        // Same pruning deleteMarkedDuplicates() does: a stale group would render rows for files
+        // that are gone the next time the duplicates view is opened.
+        if(dupGroups.length){
+            dupGroups.forEach(g=>{g.files=g.files.filter(f=>!dead.has(f.path))});
+            dupGroups=dupGroups.filter(g=>g.files.length>1);
+            dupGroups.forEach((g,i)=>g.id=i);
+            dupScanned=fReg.size;
+        }
+        selectedIndex=-1;buildModelFilter();
+        rend()   // rend() clamps the page, so deleting the last row of the last page self-corrects
+    }
+    return{gone,fail}
+}
+// Confirms, deletes, and reports. `paths` is any iterable of relative paths.
+async function confirmDelete(paths,label){
+    const list=[...paths];if(!list.length)return null;
+    const what=label||(list.length===1?`"${list[0].split('/').pop()}"`:`${list.length} items`);
+    if(!confirm(`Permanently delete ${what}?\n\nThis cannot be undone.`))return null;
+    const r=await deletePaths(list);
+    if(r.fail.length)showToast(`Deleted ${r.gone.length}, ${r.fail.length} failed — see console.`,'error');
+    else showToast(`Deleted ${r.gone.length} item${r.gone.length===1?'':'s'}.`,'success');
+    return r;
+}
+async function deleteSelection(){
+    const n=selectedItems.size;if(!n)return;
+    await confirmDelete([...selectedItems],`${n} selected item${n===1?'':'s'}`);
+}
+// =================== END SHARED FILE DELETE ===================
+
 let contextTarget=null,contextPath="",contextIsFile=false;
 function showContextMenu(e,element,path,isFile=false){e.preventDefault();contextTarget=element;contextPath=path;contextIsFile=isFile;const menu=document.getElementById('contextMenu');menu.style.display='block';menu.style.left=e.pageX+'px';menu.style.top=e.pageY+'px';document.addEventListener('click',hideContextMenu,{once:true})}
 function hideContextMenu(){document.getElementById('contextMenu').style.display='none';contextTarget=null;contextPath="";contextIsFile=false}
-async function contextDelete(){if(!contextPath)return;const name=contextPath.split('/').pop();if(!confirm(`Delete "${name}"? This cannot be undone.`))return;try{if(contextIsFile){const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);fReg.delete(contextPath);cache.delete(contextPath);aiInvalidateMat();await dDel(contextPath)}else{const parentPath=contextPath.includes('/')?contextPath.substring(0,contextPath.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;await parentHandle.removeEntry(name);dReg.delete(contextPath)}await fullScan();showToast('Deleted successfully','success')}catch(e){showToast('Delete failed: '+e.message,'error')}hideContextMenu()}
+async function contextDelete(){
+    if(!contextPath)return;
+    const path=contextPath,isFile=contextIsFile;hideContextMenu();
+    if(isFile){
+        // Right-clicking inside a multi-selection acts on the whole selection, the same rule
+        // getDragData() already applies to drag-and-drop.
+        const many=selectedItems.has(path)&&selectedItems.size>1;
+        await confirmDelete(many?[...selectedItems]:[path],many?`${selectedItems.size} selected items`:null);
+        return;
+    }
+    const name=path.split('/').pop();
+    if(!confirm(`Delete folder "${name}"?\n\nThis cannot be undone.`))return;
+    try{
+        const parentPath=path.includes('/')?path.substring(0,path.lastIndexOf('/')):"";
+        const parentHandle=(parentPath?dReg.get(parentPath):null)||rH;
+        await parentHandle.removeEntry(name);   // non-recursive, as before - a full folder throws
+        dReg.delete(path);
+        await fullScan();   // a folder delete changes the tree, so this one does need a rescan
+        showToast('Deleted successfully','success')
+    }catch(e){showToast('Delete failed: '+e.message,'error')}
+}
 function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
@@ -1881,7 +1954,7 @@ document.addEventListener('keydown',e=>{
         hideHelp(); return;
     }
     if(e.key==='Enter'&&selectedIndex>=0&&selectedIndex<cFiles.length){enterDet(selectedIndex);return}
-    if(e.key==='Delete'&&selectedItems.size>0){if(confirm(`Delete ${selectedItems.size} item(s)?`)){selectedItems.forEach(p=>{const name=p.split('/').pop();const parentPath=p.includes('/')?p.substring(0,p.lastIndexOf('/')):"";const parentHandle=parentPath?dReg.get(parentPath)||rH:rH;parentHandle.removeEntry(name).then(()=>{fReg.delete(p);cache.delete(p);aiInvalidateMat();dDel(p)}).catch(e=>console.error(e))});selectedItems.clear();setTimeout(()=>fullScan(),500);rend()};return}
+    if(e.key==='Delete'&&selectedItems.size>0){e.preventDefault();deleteSelection();return}
     if(e.key==='f'||e.key==='F'){if(!e.ctrlKey){e.preventDefault();document.getElementById('sIn').focus();return}}
     if(e.key==='r'||e.key==='R'){if(!e.ctrlKey){e.preventDefault();fullScan();return}}
     if(e.key==='t'||e.key==='T'){if(!e.ctrlKey){e.preventDefault();toggleTheme();return}}
