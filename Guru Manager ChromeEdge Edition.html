@@ -3321,6 +3321,8 @@ function aiPaint(){
         ${aiJob?`<button class="dup-btn" onclick="aiCancelJob()">Cancel</button>`
                :`<button class="dup-btn primary" onclick="aiAnalyze()">Analyze ${c.todo.toLocaleString()} items</button>`}
         <button class="dup-btn" onclick="hideAI();setView('faces')">Review people →</button>
+        ${aiJob?'':`<button class="dup-btn" onclick="aiExportIndex()" title="Save this library's AI index to a file">Export index</button>
+        <button class="dup-btn" onclick="aiImportIndex()" title="Load an index exported from another machine with the same library">Import index</button>`}
         <button class="dup-btn" onclick="aiClearData()">Clear AI data</button>
       </div>
       <p class="ai-dim" style="margin-top:14px;line-height:1.5">
@@ -3341,6 +3343,171 @@ async function aiClearData(){
     aiPaint();showToast('AI data cleared.','success');
 }
 // --- /AI:PANEL ---
+
+// --- AI:PORT ---
+// Export/import of the AI index, so hours of GPU analysis can move to a second machine holding the
+// same library. Matching is by path + lastModified. There is deliberately NO content hashing: that
+// is the exact cost the duplicate scanner's three-stage design exists to avoid, and a file that
+// really did change SHOULD fall out and be re-analyzed rather than keep a stale vector.
+const PORTV=1;
+
+// Int8Array <-> base64. IndexedDB stores typed arrays natively but JSON cannot, and writing them as
+// plain number arrays costs roughly 4x the bytes.
+function b64enc(a){
+    if(!a)return null;
+    const u=new Uint8Array(a.buffer,a.byteOffset,a.byteLength);let s='';
+    // apply() is a spread in disguise, so a long vector could blow the argument limit. Chunked.
+    for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));
+    return btoa(s);
+}
+function b64dec(s){
+    if(typeof s!=='string')return null;
+    const b=atob(s),u=new Uint8Array(b.length);
+    for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);
+    return new Int8Array(u.buffer);
+}
+// Split from the picker so the whole round trip is drivable in a test without a native dialog.
+function aiBuildExport(){
+    const items=[];
+    for(const[p,v]of cache){
+        if(!v||v.ai===undefined)continue;             // never analyzed - nothing to carry
+        const o={p,d:v.d,ai:v.ai};
+        if(v.aiSkip)o.aiSkip=v.aiSkip;                // travels, or the far end re-fails every .mkv
+        if(v.emb){o.emb=b64enc(v.emb);o.embS=v.embS}
+        if(v.embF&&v.nF){o.embF=b64enc(v.embF);o.nF=v.nF}
+        if(v.faces&&v.faces.length)o.faces=v.faces.map(f=>({
+            box:f.box,score:f.score,kps:f.kps,c:f.c,
+            emb:f.emb?b64enc(f.emb):null,embS:f.embS}));
+        items.push(o);
+    }
+    const cl=(aiMeta&&aiMeta.clusters||[]).map(c=>({
+        id:c.id,name:c.name||'',n:c.n,rep:c.rep,hidden:!!c.hidden,
+        cent:c.cent?b64enc(c.cent):null,centS:c.centS}));
+    // aiBackend is live but null until the worker probes; aiMeta.backend is the persisted copy, so a
+    // library indexed in an earlier session still exports a verifiable tier.
+    const bk=aiBackend||(aiMeta&&aiMeta.backend)||null;
+    return{count:items.length,people:cl.length,json:JSON.stringify({
+        guruAI:PORTV,aiv:AIV,
+        // The gate that matters on import. fp16 and int8 are different embedding spaces and aiScore
+        // packs everything in `cache` into one matrix, so a mix ranks garbage without ever failing.
+        tier:(bk&&bk.tier)||null,
+        backend:bk?{name:bk.name,device:bk.device||null,tier:bk.tier||null}:null,
+        exported:Date.now(),count:items.length,items,clusters:cl})};
+}
+// Parses and classifies, but writes nothing - so the caller can put real numbers in the confirm.
+function aiImportPlan(txt){
+    let j;try{j=JSON.parse(txt)}catch(e){throw new Error('That file is not a Guru AI index (invalid JSON).')}
+    if(!j||j.guruAI!==PORTV)throw new Error('Unrecognized export format'+(j&&j.guruAI?' (v'+j.guruAI+')':'')+'.');
+    if(j.aiv!==AIV)throw new Error('Built with model version '+j.aiv+', this app is on '+AIV+'.\nThe vectors are not comparable - re-analyze on this machine instead.');
+    const local=(aiBackend&&aiBackend.tier)||null;
+    if(j.tier&&local&&j.tier!==local)
+        throw new Error('Precision mismatch: the export is '+j.tier+', this machine runs '+local+'.\nMixing the two silently corrupts every score.');
+    const hit=[],changed=[],missing=[];
+    for(const o of(j.items||[])){
+        const v=cache.get(o.p);
+        if(!v){missing.push(o.p);continue}
+        (o.d!=null&&v.d!=null&&o.d!==v.d?changed:hit).push([v,o]);
+    }
+    return{hit,changed,missing,total:(j.items||[]).length,exported:j.exported,backend:j.backend,
+        tierKnown:!!(j.tier&&local),
+        clusters:(j.clusters||[]).map(c=>{const g={...c};g.cent=c.cent?b64dec(c.cent):undefined;return g})};
+}
+async function aiImportApply(plan,opt){
+    opt=opt||{};
+    const pairs=opt.includeChanged?plan.hit.concat(plan.changed):plan.hit;
+    const upd=[],seen=new Set();
+    for(const[v,o]of pairs){
+        // Replace this item's AI layer wholesale. A field-by-field merge could leave an embedding
+        // from one analysis sitting beside faces from another.
+        delete v.emb;delete v.embS;delete v.embF;delete v.nF;delete v.faces;delete v.aiSkip;delete v.aiMs;
+        v.ai=o.ai;
+        if(o.aiSkip)v.aiSkip=o.aiSkip;
+        if(o.emb){v.emb=b64dec(o.emb);v.embS=o.embS}
+        if(o.embF&&o.nF){v.embF=b64dec(o.embF);v.nF=o.nF}
+        if(o.faces&&o.faces.length)v.faces=o.faces.map(f=>{
+            const g={box:f.box,score:f.score,kps:f.kps,c:f.c};
+            if(f.emb){g.emb=b64dec(f.emb);g.embS=f.embS}
+            return g});
+        upd.push(v);seen.add(v.p);
+    }
+    // faces[].c addresses the cluster table it was written against. Any face NOT covered by the
+    // import still carries an id from this machine's own clustering, which under the imported table
+    // means a different person - so it goes back to noise rather than inheriting a stranger's name.
+    let orphaned=0;
+    if(plan.clusters.length)for(const[p,v]of cache){
+        if(seen.has(p)||!v||!v.faces)continue;
+        let t=false;v.faces.forEach(f=>{if(f.c>=0){f.c=-1;t=true}});
+        if(t){orphaned++;upd.push(v)}
+    }
+    for(let i=0;i<upd.length;i+=500)await dPutMany(upd.slice(i,i+500));
+    if(plan.clusters.length){
+        aiMeta=aiMeta||{p:'__ai__'};
+        aiMeta.v=AIV;aiMeta.clusters=plan.clusters;aiMeta.lastRun=plan.exported||Date.now();
+        if(plan.backend)aiMeta.backend=plan.backend;
+        AIC=new Map(plan.clusters.map(c=>[c.id,c.name||'']));
+        await dPut(aiMeta);
+    }
+    // Without this the packed scoring matrix survives and the import appears to have done nothing.
+    aiInvalidateMat();aiTxtCache.clear();
+    return{imported:pairs.length,missing:plan.missing.length,
+        skipped:opt.includeChanged?0:plan.changed.length,orphaned};
+}
+async function aiExportIndex(){
+    if(!aiOK()){showToast('AI export needs the local launcher — run node serve.mjs.','info');return}
+    const e=aiBuildExport();
+    if(!e.count){showToast('Nothing to export — no items have been analyzed yet.','info');return}
+    const blob=new Blob([e.json],{type:'application/json'});
+    try{
+        const h=await showSaveFilePicker({suggestedName:'guru-ai-index-'+new Date().toISOString().slice(0,10)+'.json',
+            types:[{description:'Guru AI index',accept:{'application/json':['.json']}}]});
+        const w=await h.createWritable();await w.write(blob);await w.close();
+    }catch(err){
+        if(err&&err.name==='AbortError')return;
+        showToast('Export failed: '+(err.message||err),'error');return;
+    }
+    showToast(`Exported ${e.count.toLocaleString()} items · ${e.people} ${e.people===1?'person':'people'} · ${fmtBytes(blob.size)}.`,'success');
+}
+async function aiImportIndex(){
+    if(!aiOK()){showToast('AI import needs the local launcher — run node serve.mjs.','info');return}
+    if(!fReg.size){showToast('Open your image folder first, then import.','info');return}
+    // The precision gate can only fire once this machine's own tier is known, and that comes from
+    // the worker's EP probe - so run it rather than importing unverified.
+    try{await aiWorker()}catch(e){}
+    let file;
+    try{
+        const[h]=await showOpenFilePicker({types:[{description:'Guru AI index',accept:{'application/json':['.json']}}]});
+        file=await h.getFile();
+    }catch(err){if(err&&err.name==='AbortError')return;showToast('Could not open that file.','error');return}
+    let plan;
+    try{plan=aiImportPlan(await file.text())}
+    catch(err){alert('Import refused.\n\n'+(err.message||err));return}
+    const lines=[`${plan.hit.length.toLocaleString()} of ${plan.total.toLocaleString()} items match this library.`];
+    if(plan.missing.length)lines.push(`${plan.missing.length.toLocaleString()} paths are not here.`);
+    if(plan.changed.length)lines.push(`${plan.changed.length.toLocaleString()} match by name but their timestamps differ.`);
+    if(!plan.tierKnown)lines.push('Note: model precision could not be verified on one side.');
+    let includeChanged=false;
+    // A copy that didn't preserve mtimes fails every single file, which would otherwise read as
+    // "the import did nothing" with no explanation of why.
+    if(plan.changed.length>plan.hit.length){
+        includeChanged=confirm(`${plan.changed.length.toLocaleString()} files match by path but carry different timestamps, and only ${plan.hit.length.toLocaleString()} match exactly.\n\nThat usually means the copy onto this machine did not preserve file dates, rather than that the images changed.\n\nImport them anyway?`);
+        if(!includeChanged&&!plan.hit.length)return;
+    }
+    const n=plan.hit.length+(includeChanged?plan.changed.length:0);
+    if(!n){alert('Nothing to import.\n\n'+lines.join('\n'));return}
+    const nCl=plan.clusters.length,localCl=(aiMeta&&aiMeta.clusters||[]).length;
+    let msg=lines.join('\n')+`\n\nImport ${n.toLocaleString()} items`
+        +(nCl?` and ${nCl} ${nCl===1?'person':'people'}`:'')+'?';
+    if(nCl&&localCl)msg+=`\n\nThe ${localCl} ${localCl===1?'person':'people'} already on this device will be replaced — the imported faces refer to the imported ids.`;
+    if(!confirm(msg))return;
+    document.getElementById('load').classList.remove('hidden');
+    let r;
+    try{r=await aiImportApply(plan,{includeChanged})}
+    catch(err){showToast('Import failed: '+(err.message||err),'error');return}
+    finally{document.getElementById('load').classList.add('hidden')}
+    aiPaint();if(vMode==='faces')rend();
+    showToast(`Imported ${r.imported.toLocaleString()} · ${r.missing.toLocaleString()} not found · ${r.skipped.toLocaleString()} changed`,'success');
+}
+// --- /AI:PORT ---
 
 // --- AI:FACES ---
 // Members are derived from the cache rather than stored on the cluster, so a rename or merge never
