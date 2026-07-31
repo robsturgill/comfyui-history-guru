@@ -17,6 +17,14 @@ All notable changes to the Guru Manager project will be documented in this file.
 - **Deleted files are pruned from `dupGroups`.** Deleting outside the duplicates view left stale groups that rendered rows for files that no longer existed.
 - The list row's selected-state background was a hardcoded `rgba(139,92,246,0.2)` inline style, bypassing `--sel-bg` and so wrong in light mode.
 
+- **The header clipped its own icons below ~1180px.** It holds ~12 controls in a single non-wrapping row, so 🔍 🧠 👥 ⭐ simply ran off the right edge with nothing to scroll or wrap them back. Three breakpoints now shed labels before icons and icons never; below 760px the search box takes its own row and the tools wrap beneath it. The inspector was pinned to a hardcoded `top:60px` — it now reads `--head-h`, fed by a `ResizeObserver` on the header, so a wrapped header stays in sync with no magic number.
+
+### Findings worth recording
+- **`faceEmb` is 10.6× *slower* on the GPU than on the CPU** — 116 ms on `webgpu` vs 11 ms on `wasm`. ArcFace w600k_mbf is a depthwise-separable net at 112×112: ~0.45 GFLOPs spread over many tiny kernels, so per-dispatch overhead dominates and the GPU loses. The graph is **not** partitioned; it is simply the wrong shape of work for a GPU. This is what a big GPU sitting at ~40% utilisation looked like — the dominant cost was a model that should never have been on it.
+- **The demotion probe could not see it.** `openModel`'s tier guard (`tier !== win.tier → continue`) skipped the WASM candidate. That guard exists to stop an fp16 CLIP tower being demoted into an int8 *different model*, but it was also applied to `faceDet`/`faceEmb`, which carry **no `variants`** — `variantOf()` returns the same `.onnx` whatever the tier says. Gated on `spec(key).variants`, so variant-less models get a genuine like-for-like probe. Byte-identical weights, so no `AIV` bump: cosine agreement 1.0, max abs diff 4.5e-6.
+- **Measure before optimising a pipeline.** The obvious hypothesis was that the serial `decode → infer` loop starved the GPU. Measured, decode is **9 ms of 294 ms** — prefetching it would have bought ~3%. Net effect of fixing the real cause: **294.5 ms → 81.6 ms per image, 3.4 → 12.3 images/sec.**
+- `faceDet` correctly stays on `webgpu` (31.9 vs 38.3 ms — inside the 10% margin), so the probe still discriminates rather than just preferring WASM.
+
 ### Changed
 - The two near-identical click handlers in `rend()` (grid and list) are now one `tileClick()`. Selection changes update the DOM directly via `syncSelUI()` instead of calling `rend()`, which revokes the thumbnail object URLs — the same rule the duplicates and faces views already follow.
 - `pruneSelection()` runs wherever `cFiles` is rebuilt, so the selection bar can never count — or delete — rows the user cannot see.

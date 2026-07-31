@@ -172,6 +172,11 @@ body.sel-mode .sel-cb{display:block}
        height for that - the ResizeObserver feeding --head-h follows however tall it ends up. */
     .head-tools{order:3;width:100%;margin-left:0;justify-content:center;flex-wrap:wrap;gap:6px}
     .head-sep{display:none}
+    /* Same treatment for the selection bar: the hint is the widest, least essential thing in it,
+       and margin-left:auto on a line that has wrapped just leaves the buttons looking ragged. */
+    .sel-bar{padding:9px 12px;gap:6px}
+    .sel-hint{display:none}
+    .sel-bar .spacer{margin-left:0}
 }
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;display:flex;align-items:center;gap:12px;min-width:250px;animation:toastSlide 0.3s ease}.toast.success{border-left:4px solid #4ade80}.toast.error{border-left:4px solid #ef4444}.toast.info{border-left:4px solid var(--acc)}@keyframes toastSlide{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .context-menu{position:fixed;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 0;min-width:150px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none}.context-menu-item{padding:8px 16px;cursor:pointer;color:var(--txt);font-size:0.85rem}.context-menu-item:hover{background:var(--side)}.context-menu-item.disabled{opacity:0.5;cursor:not-allowed}
