@@ -1,4 +1,4 @@
-# History Guru 🧘‍♂️ v4.6.0 (ChromeEdge Edition)
+# History Guru 🧘‍♂️ v4.7.0 (ChromeEdge Edition)
 
 > **The 100% Offline, Single-File File Manager & Metadata Viewer for AI Images.**
 
@@ -12,7 +12,8 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 
 ### 📂 Pro-Grade File Management (Chrome/Edge Only)
 *   **True File Operations:** Create folders, rename files on disk, and move files between directories directly from the UI.
-*   **Multi-Select Engine:** Full Windows-style `Shift+Click` (range) and `Ctrl+Click` (toggle) selection.
+*   **Multi-Select Engine:** Full Windows-style `Shift+Click` (range) and `Ctrl+Click` (toggle) selection, plus a ☑ **selection mode** where a plain click selects — no key held — with checkboxes and a **Delete N** bar.
+*   **Deletion That Doesn't Lose Your Place:** Delete from the detail view, from a multi-selection, or by right-click. The listing updates in place, so an active search survives the delete instead of being wiped.
 *   **Bulk Drag & Drop:** Select a group of images and drag them into the sidebar to organize your library in seconds.
 *   **Direct Overwrite:** The "Fix & Save" engine writes updated metadata directly back to the original file—no more `fixed_` copies cluttering your folders.
 

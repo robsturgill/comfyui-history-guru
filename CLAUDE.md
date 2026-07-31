@@ -38,6 +38,18 @@ duplicates view), then `rTree(); buildModelFilter(); syncSortUI(); await opD(nul
 the search parser end-to-end. Note `dReg` needs `''` mapped to a root stub, and each folder handle
 needs a `removeEntry` if you touch delete paths.
 
+That same seeding works **fully automated** through Playwright against `node serve.mjs` — navigate
+to `http://127.0.0.1:8787/`, run the seed in one `evaluate`, then drive real clicks. For anything
+destructive, stub `removeEntry` to record instead of delete:
+
+```js
+const mkDir = p => ({name:p.split('/').pop()||'root', kind:'directory',
+    async removeEntry(n){ window.__deleted.push((p?p+'/':'')+n) }});
+```
+
+That exercises the `cFiles` splice, the `aIdx`/`selectedIndex` fixups and "does the search survive"
+with zero filesystem writes — which matters, because `samples/` has no backup.
+
 **Testing the video path without the picker.** The parsers are pure and run fine in Node: extract the
 `<script>` block, brace-match out `parseMetadata`/`parseComfy`/`readVideoMeta`/etc., and call them
 directly — Node's `File`/`Blob` give the same `slice()`/`arrayBuffer()` contract Chrome does, so
@@ -142,6 +154,38 @@ the other way (`scrollToSelected`) must subtract `pageStart()`.
 Reset `curPage = 0` wherever `cFiles` is rebuilt: `opD()`, the search handler, `sortByColumn()`,
 `changeSort()`. `ensurePageFor()` flips the page when arrow keys or the detail viewer walk past a
 page edge.
+
+### Deleting files — one path, and it must not rescan
+
+`deletePaths(paths)` is the **only** place a file is removed. It updates `fReg`, `cache`, IndexedDB,
+`favorites` (persisted) and `selectedItems`, prunes `dupGroups`, then filters the rows out of
+`cFiles` and calls `rend()`.
+
+**It deliberately does not call `fullScan()` or `opD()`.** Both rebuild `cFiles` from `fReg`, which
+throws away an active search while leaving the query in the box — that was the bug. `confirmDelete()`
+wraps it with the confirmation and toast; `deleteSelection()` and `deleteFromDetail()` wrap that.
+
+Folder deletes are the one exception and still `fullScan()`, because they change the tree.
+
+In the detail view the next image slides into the slot `aIdx` already points at, so `aIdx` only
+moves when the list empties or the deleted item was last.
+
+### Selection mode
+
+`selectMode` (toolbar ☑) changes **only what a plain click does** — it selects instead of opening.
+`Ctrl`/`Shift` click are untouched, and double-click still opens the viewer. Checkboxes are always
+in the DOM and revealed by `body.sel-mode`, so toggling the mode never re-renders.
+
+- **Selection changes call `syncSelUI()`, never `rend()`** — `rend()` calls `clearURLs()`, which
+  revokes the thumbnail object URLs and blanks the images. Same rule as `syncDupGroupUI()`.
+- Grid and list share **one** `tileClick(e,f,i)`. They were near-identical copies; don't fork them.
+- `pruneSelection()` must run wherever `cFiles` is rebuilt (`opD`, `runSearch`), or the bar counts
+  and deletes rows the user cannot see.
+- The list checkbox is **absolutely positioned** inside `.list-cell1`. Laid out inline it pushes the
+  thumbnail past the first grid track, which is pinned to `.list-head` — see the sticky-bar note.
+- The bar lives outside `.grid-scroll`, between `#gridToolbar` and the scroller, so it never fights
+  `position:sticky`. It is shown by `body.sel-mode.sel-able:not(.mode-detail)` — a single rule,
+  because a separate hide rule loses on specificity.
 
 ### Supported formats
 
@@ -328,7 +372,7 @@ extraction) or `parseA1111()`. Self-contained and independent of everything belo
 ### Duplicate detection — lines 536–826
 See the dedicated section below.
 
-### File operations — 830 (`contextDelete`), 993 (`moveFile`), 1137 (`fixSave`), 1198 (`renameFile`)
+### File operations — grep `// ===================== SHARED FILE DELETE`, then `moveFile`, `fixSave`, `renameFile`
 `fixSave()` rewrites PNG `tEXt` chunks with a hand-rolled CRC32 (`crT`/`cr32`, line ~1135) and
 converts non-PNG to PNG via canvas. Any file mutation must update **all three** of `fReg`, `cache`,
 and IndexedDB, or the UI desyncs.
@@ -481,7 +525,7 @@ cost real debugging time:
 | `AI:TOKENIZER` / `AI:PREPROC` | Verbatim copies of `ai/src/*.js`, which the worker also `importScripts` — **do not let them diverge**. Tested by `ai/src/*.test.mjs` in Node |
 | `AI:SEARCH` | Packed int8 matrix, `aiQueryVecs`, `aiScore`, `findSimilar` |
 | `AI:PANEL` | Panel, worker plumbing, batch job, video frame sampler |
-| `AI:FACES` | People view, rename, merge, hide |
+| `AI:FACES` | People view, rename, merge, hide. The 👥 toolbar button is the way *back* into it — `aiSearchCluster()` ("Show all") leaves for a search. Cluster ids are surfaced on the card and in the inspector, because `aiMergePrompt()` asks the user to type one |
 
 Cache items gain `ai` (a **plain number**, the `AIV` stamp), `emb`/`embS`, `embF`/`nF` for video,
 and `faces[]`. Library-global cluster state is a **reserved `__ai__` record inside store `"i"`** —

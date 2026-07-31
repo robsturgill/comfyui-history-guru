@@ -2,6 +2,25 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [4.7.0] - 2026-07-31
+
+### Added
+- **☑ Selection mode**: A toolbar toggle that makes a plain click *select* instead of open, so multi-select no longer requires holding `Ctrl` or `Shift`. Checkboxes appear on list rows and grid cards, and a bar above the listing shows the live count with **Select all**, **Clear** and **Delete N**. Double-click still opens the viewer. `Ctrl+Click` and `Shift+Click` behave exactly as before.
+- **Delete from the detail view**: A 🗑 button in the inspector, and the `Delete` key while the viewer is open. The next image slides into the slot the deleted one occupied, so the viewer stays open on it rather than kicking back to the grid.
+- **Bulk delete with a counted confirmation**: `Permanently delete N selected items?` — from the selection bar, the `Delete` key, or a right-click inside a multi-selection (which now acts on the whole selection, matching what drag-and-drop already did).
+- **👥 People button** in the toolbar. "Show all" on a face card leaves the People view for a search; there was previously no way back short of starting over.
+- **Person ids are visible**: each face card shows its `id N` (click to copy) — the number the *Merge…* prompt asks the user to type, which was only visible inside that prompt. The inspector also lists the people found in the open image as chips, so one click goes from an image to every photo of that person.
+
+### Fixed
+- **Deleting no longer discards an active search.** Every file delete ran `fullScan()`, which rebuilds `cFiles` from `fReg` and ends in `opD(null,'')` — so the results vanished while the query stayed sitting in the search box. Deletion now updates the registries and removes the rows from `cFiles` directly, preserving the search, the sort and the current page. Folder deletes still rescan, because they change the tree.
+- **Deleted files are removed from favorites.** The `Delete`-key path never did, so a deleted path stayed in `localStorage` forever.
+- **Deleted files are pruned from `dupGroups`.** Deleting outside the duplicates view left stale groups that rendered rows for files that no longer existed.
+- The list row's selected-state background was a hardcoded `rgba(139,92,246,0.2)` inline style, bypassing `--sel-bg` and so wrong in light mode.
+
+### Changed
+- The two near-identical click handlers in `rend()` (grid and list) are now one `tileClick()`. Selection changes update the DOM directly via `syncSelUI()` instead of calling `rend()`, which revokes the thumbnail object URLs — the same rule the duplicates and faces views already follow.
+- `pruneSelection()` runs wherever `cFiles` is rebuilt, so the selection bar can never count — or delete — rows the user cannot see.
+
 ## [4.6.0] - 2026-07-28
 
 ### Added
