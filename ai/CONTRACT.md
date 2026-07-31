@@ -109,6 +109,39 @@ runtime failure.
   **int8 for both towers**. Never mix an fp16 tower with an int8 tower — they do not share an
   embedding space, which is what makes a mixed fallback silently return nonsense.
 
+### On a machine with NO WebNN, `faceEmb` must demote to WASM — measured, 2026-07-31
+
+The table above was measured on the NPU box. On a discrete-GPU machine with WebNN unavailable
+(`WebNN is not supported in current environment`) the whole ladder falls to `webgpu`, and there
+**`faceEmb` is 10.6x slower on the GPU than on the CPU**:
+
+| Model | `webgpu` | `wasm` | Resolved |
+|---|---|---|---|
+| `clipVision` fp16 | **10.3 ms** | fails to load (fp16) | `webgpu` |
+| `faceDet` SCRFD-500M | **31.9 ms** | 38.3 ms | `webgpu` — under the 10% margin, correctly not demoted |
+| `faceEmb` ArcFace mbf | 116.0 ms | **11.0 ms** | `wasm` (demoted) |
+
+ArcFace w600k_mbf is a depthwise-separable net at 112×112 — ~0.45 GFLOPs across many tiny kernels,
+so per-dispatch overhead dominates and the GPU loses badly. It is **not** partitioning; the graph is
+clean, it is simply the wrong shape of work for a GPU.
+
+**The demotion probe could not see this**, because `openModel`'s tier guard (`tier !== win.tier →
+continue`) skipped the WASM candidate. That guard exists to stop an fp16 CLIP tower being demoted to
+an int8 *different model*; it was also being applied to `faceDet`/`faceEmb`, which have **no
+`variants`** — `variantOf()` returns the same `.onnx` whatever the tier says. The guard is now
+conditional on `spec(key).variants`, so variant-less models get a genuine like-for-like probe.
+
+**Safe for existing indexes — no `AIV` bump.** Both EPs load byte-identical weights: cosine
+agreement **1.0**, max abs element diff **4.5e-6**. Face embeddings and cluster assignments are
+unchanged (thresholds are 0.50/0.55).
+
+Measured end to end on `samples/` (6 images, 2 faces each, `want:{clip,faces}`):
+**294.5 ms → 81.6 ms per image, 3.4 → 12.3 images/sec.** Decode is only ~9 ms of that, so the
+pipeline is *not* decode-bound and prefetching decode would have bought ~3%.
+
+One cosmetic wart: the panel labels the winning `wasm` candidate `tier: int8`, because `tierOf()` is
+a pure function of the EP. For a variant-less model there is no int8 build — the file is the same.
+
 **Validation evidence** (vision `webnn:npu` + text `webnn:gpu`, real `samples/`): "a close-up
 portrait of a face" scores 0.2628 on the face close-up — the matrix maximum; "a cat or a dog" puts
 both foxes and the raccoon in the top three. The two known-duplicate pairs in `samples/` produce

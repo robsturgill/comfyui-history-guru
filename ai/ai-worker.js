@@ -226,7 +226,13 @@ async function openModel(key){
     // on speed would silently move the whole library into a different embedding space. Once a
     // winner exists, only same-tier candidates are eligible as the probe. WASM stays a
     // fallback of last resort, reached when the ladder above it fails, never by demotion.
-    if (win && tier !== win.tier) continue;
+    // ...but only for models that HAVE variants. faceDet/faceEmb carry a single `file`, so
+    // variantOf() returns byte-identical weights whatever the tier says, and the probe is
+    // genuinely like-for-like -- there is no second embedding space to slide into. Skipping it
+    // for them costs 10x on a machine with no WebNN: measured, faceEmb is 116ms on webgpu vs
+    // 11ms on wasm (cosine agreement 1.0, max abs diff 4.5e-6, same .onnx). A depthwise-
+    // separable net that small is dominated by per-kernel launch overhead, not compute.
+    if (win && tier !== win.tier && spec(key).variants) continue;
     const v = variantOf(key, tier);
     let s = null;
     try{
