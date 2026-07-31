@@ -526,6 +526,7 @@ cost real debugging time:
 | `AI:SEARCH` | Packed int8 matrix, `aiQueryVecs`, `aiScore`, `findSimilar` |
 | `AI:PANEL` | Panel, worker plumbing, batch job, video frame sampler |
 | `AI:FACES` | People view, rename, merge, hide. The 👥 toolbar button is the way *back* into it — `aiSearchCluster()` ("Show all") leaves for a search. Cluster ids are surfaced on the card and in the inspector, because `aiMergePrompt()` asks the user to type one |
+| `AI:PORT` | Index export/import. `aiBuildExport` / `aiImportPlan` / `aiImportApply` are split from the picker wrappers so the whole round trip is testable without a native dialog — see CONTRACT §7a for the format and the two refusal gates |
 
 Cache items gain `ai` (a **plain number**, the `AIV` stamp), `emb`/`embS`, `embF`/`nF` for video,
 and `faces[]`. Library-global cluster state is a **reserved `__ai__` record inside store `"i"`** —
@@ -538,6 +539,11 @@ without discarding any parsed image metadata.
 
 **No AI work happens in `scD()` or `proc()`.** Analysis is an explicit opt-in job, so opening a
 folder is exactly as fast as before.
+
+Seeding `cache` alone is **not** enough to test scoring: `aiBuildMat()` filters on `fReg.has(p)`, so
+an item with a perfectly good `emb` that isn't in the file registry never enters the matrix, gets
+`s = -1`, and is dropped — `aiScore` rewrites its array in place, so the symptom is an empty result
+rather than a zero score. Seed `fReg` too.
 
 ## Conventions
 

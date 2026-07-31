@@ -58,3 +58,6 @@ ai/ort/
 ai/models/
 # scratch verification pages, not part of the app:
 ai/diagnostics/
+
+# Playwright MCP test artifacts
+.playwright-mcp/

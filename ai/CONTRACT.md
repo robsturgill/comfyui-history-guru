@@ -340,9 +340,53 @@ hunks. `AI:CSS` is in the `<style>` block; the rest are at the end of the `<scri
 | `AI:SEARCH` | F | Matrix build/invalidate, `aiScore`, `aiQueryVecs` |
 | `AI:PANEL` | G | AI panel, `setAIProgress`, analyze/cancel orchestration, video frame sampler |
 | `AI:FACES` | H | `renderFaces`, `syncClusterUI`, `aiRenameCluster`, crop rendering |
+| `AI:PORT` | — | `aiBuildExport` / `aiImportPlan` / `aiImportApply`, `b64enc`/`b64dec`, picker wrappers |
 
 When a stream implements a stub, it **moves the body inside its marker block** and deletes the stub
 from the contract area — it does not leave two definitions (the later one silently wins).
+
+---
+
+## 7a. Index export/import (`AI:PORT`)
+
+Moves an analyzed index to a second machine holding the **same library**. Format version is `PORTV`,
+independent of `AIV`: bump `PORTV` only when the *file layout* changes, `AIV` when the *vectors* do.
+
+```json
+{ "guruAI": 1, "aiv": 1, "tier": "fp16", "backend": {…}, "exported": 1753…, "count": 8500,
+  "items":    [ {"p":"…", "d":1753…, "ai":1, "emb":"<b64>", "embS":0.012,
+                 "embF":"<b64>", "nF":5, "aiSkip":"nodecode",
+                 "faces":[{"box":[…], "score":…, "kps":[…], "emb":"<b64>", "embS":…, "c":3}]} ],
+  "clusters": [ {"id":3, "name":"Rob", "cent":"<b64>", "centS":…, "n":42, "rep":"…", "hidden":false} ] }
+```
+
+**Two gates, and only one of them is obvious.**
+
+- `aiv !== AIV` → refuse. Different model, incomparable vectors.
+- **`tier` mismatch → refuse.** This is the silent one. `aiBuildMat` packs every `emb` in `cache`
+  into a single matrix with no provenance, so fp16 vectors imported onto an int8 machine sit in an
+  embedding space they don't belong to and rank garbage while every hard-failure check passes — the
+  same genre as the NaN text tower in §3a. `aiImportIndex()` therefore `await aiWorker()` **before**
+  planning, because `aiBackend.tier` is `null` until the EP probe has run and a null tier silently
+  skips the gate.
+
+`aiBuildExport()` falls back to `aiMeta.backend.tier` when `aiBackend` is null, so a library indexed
+in an earlier session still exports a verifiable tier.
+
+**Matching is by path, validated against `d` (lastModified).** Deliberately no content hashing: that
+is the cost the duplicate scanner's three-stage design exists to avoid, and cache items carry no byte
+size to validate against anyway (`meta.size` is a *string* on the video fallback path). A file whose
+mtime moved is reported as `changed` and skipped — unless `changed > hit`, which means the copy onto
+this machine didn't preserve dates at all, and the user is offered the override rather than being
+shown an import that silently did nothing.
+
+**`faces[].c` addresses the cluster table it was written against.** So `aiImportApply` resets `c` to
+`-1` on every local face *not* covered by the import; leaving it would re-point that face at whoever
+holds the same id in the imported table. Cluster-id remapping across two populated devices is **not**
+implemented and should not be added quietly — it is a merge, not a restore.
+
+`aiInvalidateMat()` after applying is mandatory. Skip it and the stale packed matrix survives and the
+whole import appears to have done nothing.
 
 ---
 

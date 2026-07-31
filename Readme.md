@@ -77,6 +77,7 @@ Organize, sort, move, rename, and "un-bake" your AI generations without ever lea
 *   **Composes With Everything:** `sem:"portrait" model:flux -blurry` works exactly as you'd expect. Semantic terms rank; the normal filters still narrow.
 *   **Runs On Your NPU:** Uses **WebNN** via ONNX Runtime Web, which is the only browser API that can reach an NPU (WebGPU cannot). It probes NPU → GPU → WebGPU → CPU and picks what actually performs, rejecting any backend that returns garbage.
 *   **Opt-In and Reversible:** Analysis is an explicit button, cancellable and resumable; results cache to IndexedDB so it never redoes work. **Clear AI data** removes it all without touching your images.
+*   **Index Once, Use Anywhere:** **Export index** writes every embedding, face and person name to a single JSON file; **Import index** restores it on another machine holding the same library, so you analyze once rather than once per device. The import checks that the two sides actually line up — it reports how many files matched, and refuses outright if the index was built with a different model or a different precision.
 
 ---
 
