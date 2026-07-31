@@ -3386,11 +3386,11 @@ function aiBuildExport(){
     // aiBackend is live but null until the worker probes; aiMeta.backend is the persisted copy, so a
     // library indexed in an earlier session still exports a verifiable tier.
     const bk=aiBackend||(aiMeta&&aiMeta.backend)||null;
-    return{count:items.length,people:cl.length,json:JSON.stringify({
-        guruAI:PORTV,aiv:AIV,
-        // The gate that matters on import. fp16 and int8 are different embedding spaces and aiScore
-        // packs everything in `cache` into one matrix, so a mix ranks garbage without ever failing.
-        tier:(bk&&bk.tier)||null,
+    // The gate that matters on import. fp16 and int8 are different embedding spaces and aiScore
+    // packs everything in `cache` into one matrix, so a mix ranks garbage without ever failing.
+    const tier=(bk&&bk.tier)||null;
+    return{count:items.length,people:cl.length,tier,json:JSON.stringify({
+        guruAI:PORTV,aiv:AIV,tier,
         backend:bk?{name:bk.name,device:bk.device||null,tier:bk.tier||null}:null,
         exported:Date.now(),count:items.length,items,clusters:cl})};
 }
@@ -3454,6 +3454,11 @@ async function aiImportApply(plan,opt){
 }
 async function aiExportIndex(){
     if(!aiOK()){showToast('AI export needs the local launcher — run node serve.mjs.','info');return}
+    // Same reason the import awaits it: aiBackend.tier is null until the EP probe runs, and
+    // aiMeta only exists once faces have been clustered - so a library that was analyzed for
+    // semantic search and never clustered would otherwise write tier:null, which disables the
+    // gate on the far end entirely rather than tripping it.
+    try{await aiWorker()}catch(_){}
     const e=aiBuildExport();
     if(!e.count){showToast('Nothing to export — no items have been analyzed yet.','info');return}
     const blob=new Blob([e.json],{type:'application/json'});
@@ -3465,7 +3470,8 @@ async function aiExportIndex(){
         if(err&&err.name==='AbortError')return;
         showToast('Export failed: '+(err.message||err),'error');return;
     }
-    showToast(`Exported ${e.count.toLocaleString()} items · ${e.people} ${e.people===1?'person':'people'} · ${fmtBytes(blob.size)}.`,'success');
+    showToast(`Exported ${e.count.toLocaleString()} item${e.count===1?'':'s'} · ${e.people} ${e.people===1?'person':'people'} · ${fmtBytes(blob.size)}`
+        +(e.tier?` · ${e.tier}`:' · precision unverified'),e.tier?'success':'info');
 }
 async function aiImportIndex(){
     if(!aiOK()){showToast('AI import needs the local launcher — run node serve.mjs.','info');return}
@@ -3481,10 +3487,14 @@ async function aiImportIndex(){
     let plan;
     try{plan=aiImportPlan(await file.text())}
     catch(err){alert('Import refused.\n\n'+(err.message||err));return}
+    // The precision gate can only compare two known tiers. If either side is missing one - the
+    // export predates its worker probe, or this machine's models failed to load - the check is
+    // skipped entirely, which is the dangerous direction. It gets its own confirm rather than a
+    // line in a list, because a wrong-tier import ranks garbage while looking completely healthy.
+    if(!plan.tierKnown&&!confirm('Model precision could not be verified.\n\nIf the two machines ran different backends (one NPU/GPU at fp16, one CPU at int8) the imported vectors are from a different embedding space and every semantic score will be wrong.\n\nThis is undoable — "Clear AI data" and re-analyze fixes it.\n\nImport anyway?'))return;
     const lines=[`${plan.hit.length.toLocaleString()} of ${plan.total.toLocaleString()} items match this library.`];
     if(plan.missing.length)lines.push(`${plan.missing.length.toLocaleString()} paths are not here.`);
     if(plan.changed.length)lines.push(`${plan.changed.length.toLocaleString()} match by name but their timestamps differ.`);
-    if(!plan.tierKnown)lines.push('Note: model precision could not be verified on one side.');
     let includeChanged=false;
     // A copy that didn't preserve mtimes fails every single file, which would otherwise read as
     // "the import did nothing" with no explanation of why.
@@ -3505,7 +3515,8 @@ async function aiImportIndex(){
     catch(err){showToast('Import failed: '+(err.message||err),'error');return}
     finally{document.getElementById('load').classList.add('hidden')}
     aiPaint();if(vMode==='faces')rend();
-    showToast(`Imported ${r.imported.toLocaleString()} · ${r.missing.toLocaleString()} not found · ${r.skipped.toLocaleString()} changed`,'success');
+    showToast(`Imported ${r.imported.toLocaleString()} · ${r.missing.toLocaleString()} not found · ${r.skipped.toLocaleString()} changed`
+        +(r.orphaned?` · ${r.orphaned.toLocaleString()} local faces reset to unnamed`:''),'success');
 }
 // --- /AI:PORT ---
 

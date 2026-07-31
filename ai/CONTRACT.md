@@ -370,8 +370,17 @@ independent of `AIV`: bump `PORTV` only when the *file layout* changes, `AIV` wh
   planning, because `aiBackend.tier` is `null` until the EP probe has run and a null tier silently
   skips the gate.
 
-`aiBuildExport()` falls back to `aiMeta.backend.tier` when `aiBackend` is null, so a library indexed
-in an earlier session still exports a verifiable tier.
+**Both ends await the probe, and that is not symmetry for its own sake.** `aiExportIndex()` awaits it
+too, because the `aiMeta.backend.tier` fallback only helps a library that has been *clustered* —
+`aiMeta` is created by `aiCluster()` and nothing else. A user who ran semantic analysis, never
+touched faces, then reloaded and exported would write `tier: null`, and a null tier doesn't trip the
+gate on the far end, it **disables** it. Verified: that path emitted `tier:null` and the resulting
+file imported onto an int8 machine with no refusal.
+
+`tier: null` can therefore still arrive from an older file or a machine whose models failed to load
+(the `aiBackend={name:'error'}` path carries no `tier`). That case gets its **own** `confirm`, not a
+line in the summary — an unverifiable import is the dangerous direction, and it is recoverable via
+*Clear AI data* + re-analyze, which argues for a hard prompt rather than a refusal.
 
 **Matching is by path, validated against `d` (lastModified).** Deliberately no content hashing: that
 is the cost the duplicate scanner's three-stage design exists to avoid, and cache items carry no byte
