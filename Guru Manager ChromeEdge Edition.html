@@ -2871,9 +2871,15 @@ function aiWorker(){
         aiPend.delete(d.id);w.res(d);
     };
     aiReady=(async()=>{
-        const man=await (await fetch('ai/models/manifest.json',{cache:'no-store'})).json();
-        clipVocabLoad(await (await fetch('ai/models/clip-tokenizer/vocab.json')).json(),
-                      await (await fetch('ai/models/clip-tokenizer/merges.txt')).text());
+        // Check ok before parsing. serve.mjs answers a miss with the plain-text body
+        // "Not found: <path>", so a bare .json() reports "Unexpected token 'N'" and hides
+        // which asset is actually missing - which is always "you never ran fetch-models.mjs".
+        const aiGet=async(u,o)=>{const r=await fetch(u,o);
+            if(!r.ok)throw new Error(`${u} missing (HTTP ${r.status}) - run: node fetch-models.mjs`);
+            return r};
+        const man=await (await aiGet('ai/models/manifest.json',{cache:'no-store'})).json();
+        clipVocabLoad(await (await aiGet('ai/models/clip-tokenizer/vocab.json')).json(),
+                      await (await aiGet('ai/models/clip-tokenizer/merges.txt')).text());
         const wait=new Promise((res,rej)=>{
             aiInitDone={res,rej};
             setTimeout(()=>{if(aiInitDone){aiInitDone=null;rej(new Error('model load timed out'))}},180000);

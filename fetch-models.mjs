@@ -26,6 +26,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AI_DIR = path.join(__dirname, 'ai');
 const ORT_DIR = path.join(AI_DIR, 'ort');
 const MODELS_DIR = path.join(AI_DIR, 'models');
+// The tokenizer vocab lives in its own subdirectory because the app hardcodes that path
+// (ai/models/clip-tokenizer/) and so does ai/src/tokenizer.test.mjs. Keep the three in step.
+const TOK_DIR = path.join(MODELS_DIR, 'clip-tokenizer');
 
 const ORT_VERSION = '1.27.0'; // current stable onnxruntime-web on npm as of writing — see report
 
@@ -54,7 +57,7 @@ const CDN = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist`;
 const CLIP_REPO = 'https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/main';
 const FACE_REPO = 'https://huggingface.co/immich-app/buffalo_s/resolve/main';
 
-/** @type {Array<{key:string, url:string, dir:string, file:string, bytes:number, sha256:string, group?:string, variant?:string, int8Skippable?:boolean, kind:'ort'|'onnx'}>} */
+/** @type {Array<{key:string, url:string, dir:string, file:string, bytes:number, sha256:string, group?:string, variant?:string, int8Skippable?:boolean, kind:'ort'|'onnx'|'tokenizer'}>} */
 const SOURCES = [
   // --- ONNX Runtime Web, the /all jsep UMD build (WebGPU + WebNN + WASM/CPU all in one) ---
   {
@@ -112,6 +115,20 @@ const SOURCES = [
     url: `${FACE_REPO}/recognition/model.onnx`,
     bytes: 13616099, sha256: '9cc6e4a75f0e2bf0b1aed94578f144d15175f357bdc05e815e5c4a02b319eb4f',
     group: 'faceEmb',
+  },
+
+  // --- CLIP byte-BPE tokenizer tables. Never int8Skippable: the text tower is useless without
+  //     them, and their absence used to surface only as the 404 body failing to JSON-parse
+  //     ("Unexpected token 'N', \"Not found:\"") on a fresh clone. ---
+  {
+    key: 'clip-vocab', kind: 'tokenizer', dir: TOK_DIR, file: 'vocab.json',
+    url: `${CLIP_REPO}/vocab.json`,
+    bytes: 862328, sha256: '5047b556ce86ccaf6aa22b3ffccfc52d391ea4accdab9c2f2407da5b742d4363',
+  },
+  {
+    key: 'clip-merges', kind: 'tokenizer', dir: TOK_DIR, file: 'merges.txt',
+    url: `${CLIP_REPO}/merges.txt`,
+    bytes: 524619, sha256: '9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a',
   },
 ];
 

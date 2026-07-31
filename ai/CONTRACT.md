@@ -82,7 +82,7 @@ runtime failure.
     "faceDet":   { "…": "SCRFD-500M-KPS, [1,3,640,640] → boxes+scores+5 kps" },
     "faceEmb":   { "…": "ArcFace w600k_mbf, [1,3,112,112] → [1,512]" }
   },
-  "tokenizer": { "vocab": "vocab.json", "merges": "merges.txt" }
+  "tokenizer": { "vocab": "clip-tokenizer/vocab.json", "merges": "clip-tokenizer/merges.txt" }
 }
 ```
 
