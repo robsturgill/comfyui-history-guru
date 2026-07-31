@@ -3691,9 +3691,11 @@ function aiClusterMembers(){
 function renderFaces(c){
     if(!aiOK()){c.innerHTML='<div class="json-empty">AI features need the local launcher — run <code>node serve.mjs</code>.</div>';return}
     const mem=aiClusterMembers();
-    // A manual person survives with no photos yet - it still needs a card, or there is no way to
-    // rename or delete one created by mistake.
-    const cl=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&(mem.has(x.id)||x.manual))
+    // Zero members is not the same as gone. A manual person created a moment ago has none yet, and a
+    // NAMED cluster the user has removed from every photo would otherwise lose its card - and with it
+    // the rename box, Merge and the only way back. An unnamed cluster whose files were deleted from
+    // disk carries no user work and is dropped, which is what this filter was originally for.
+    const cl=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&(mem.has(x.id)||x.manual||(AIC.get(x.id)||'').trim()))
         .sort((a,b)=>((mem.get(b.id)||[]).length)-((mem.get(a.id)||[]).length));
     document.getElementById('fCount').innerText=`${cl.length} people`;
     if(!cl.length){c.innerHTML=`<div class="json-empty">No people found yet. Open the 🧠 panel and run Analyze.<br><br>
@@ -3758,7 +3760,11 @@ async function aiSaveMeta(){if(!aiMeta)return;aiMeta.clusters=(aiMeta.clusters||
 const MANUAL_ID0=1000000;
 async function aiNewPerson(name){
     aiMeta=aiMeta||{p:'__ai__',v:AIV,clusters:[]};
-    const id=Math.max(aiMeta.nextM||MANUAL_ID0,MANUAL_ID0);
+    // Also stepped past the highest id in use. The clusterer hands out 0..n from its own counter and
+    // shares this id space, so a library with more clusters than MANUAL_ID0 would otherwise collide -
+    // and .concat() in aiCluster() would leave two entries with one id.
+    const top=(aiMeta.clusters||[]).reduce((m,c)=>Math.max(m,c.id||0),0);
+    const id=Math.max(aiMeta.nextM||0,MANUAL_ID0,top+1);
     aiMeta.nextM=id+1;
     aiMeta.clusters=(aiMeta.clusters||[]).concat([{id,name:(name||'').trim(),manual:true,hidden:false}]);
     AIC.set(id,(name||'').trim());
@@ -3811,8 +3817,9 @@ function aiSearchCluster(id){
 // so merging is the most-used action here, not an edge case.
 async function aiMergePrompt(id){
     if(!aiMeta)return;
-    const mem=aiClusterMembers();
-    const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden&&(mem.has(x.id)||x.manual));
+    // Must match aiPickPerson's filter exactly, or the picker offers a target this guard then
+    // rejects with "No such person id." - which is what happened with a person at zero photos.
+    const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden);
     if(!others.length){showToast('Nothing to merge into.','info');return}
     const me=AIC.get(id)||('person-'+id);
     // allowNew:false - merging into a person with no photos yet is a confusing no-op.

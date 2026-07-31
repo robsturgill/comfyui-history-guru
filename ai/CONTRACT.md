@@ -293,7 +293,15 @@ is a cluster entry with `manual: true` and no centroid.
 
 **Ids come from `nextM`, starting at `MANUAL_ID0 = 1000000`. Never negative.** `c >= 0` and
 "`c < 0` is the noise bucket" checks are spread across the file, and a negative id would be silently
-treated as an unclustered face everywhere.
+treated as an unclustered face everywhere. Allocation also steps past the highest id currently in
+use — the clusterer counts up from 0 in the *same* id space, so a library with more clusters than
+`MANUAL_ID0` would otherwise collide and the `.concat()` below would emit two entries with one id.
+
+**Zero members ≠ gone**, and three surfaces have to agree on that or the user hits a dead end:
+`aiPickPerson` lists **every** non-hidden person, `aiMergePrompt`'s target guard uses the *same*
+filter (a mismatch made the picker offer targets that merge then rejected as "No such person id"),
+and `renderFaces` keeps any cluster that is manual **or named** — a named person removed from every
+photo would otherwise lose their card, and with it the rename box and the only way back.
 
 **`aiCluster()` must `.concat()` the manual entries back** after rebuilding the table from the
 worker's response. The clusterer never emits them, so a plain reassignment deletes every hand-made

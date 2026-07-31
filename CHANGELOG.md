@@ -13,7 +13,7 @@ All notable changes to the Guru Manager project will be documented in this file.
 ### Fixed
 - **Hand-tagged people survive re-analysis.** `aiCluster()` overwrites every `faces[].c` and replaces the cluster table wholesale, so anything stored there is erased on the next Analyze run. Manual tags live in a separate layer (`pA`/`pR` on the cache item) that clustering never touches, and hand-made people are carried across the rebuild explicitly. Covered by `ai/src/people.test.mjs`, which was verified by mutation — removing the fix fails the test.
 - **"Show all" queries by person id, not by name.** Two people can be given the same name, after which `face:rob` returned the union of both. Cards still display the friendly name.
-- Removing a person from the last photo they appeared in no longer makes them impossible to add back — the picker lists every person, including ones at zero photos.
+- Removing a person from the last photo they appeared in no longer strands them. The picker lists every person including ones at zero photos, a **named** person keeps their card in the People view (and with it the rename box and *Merge…*), and the merge target list now matches exactly what the picker offers — previously the picker could offer a target that *Merge…* then rejected as "No such person id."
 - The picker's action radio resets to **Add** on every open, instead of inheriting *Remove* from a previous use.
 
 ### Changed

@@ -556,6 +556,9 @@ removing a person writes a suppression entry rather than editing `c`.
   `c<0` means noise everywhere in this file.
 - `aiSearchCluster()` queries `face:person-<id>`, never the name: two people can be named "Rob", and
   the card showing a friendly name is a display concern, not a query one.
+- **Zero members ≠ gone.** `aiPickPerson` lists every non-hidden person, `aiMergePrompt`'s target
+  guard uses the *same* filter, and `renderFaces` keeps a cluster that is manual or named. Diverge
+  and you get a dead end: a person removed from every photo who can never be added back.
 
 `ai/src/people.test.mjs` drives the real page through Playwright against `node serve.mjs` and exists
 mainly for the re-cluster case. Verified by mutation: drop the `.concat(man)` and it fails.

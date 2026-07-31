@@ -207,6 +207,51 @@ describe('search and People view see the manual layer', () => {
     });
 });
 
+// Removing someone from every photo they appear in must not strand them. Both of these were found
+// by driving the real UI, not by reading the code.
+describe('a person at zero photos is still reachable', () => {
+    test('a NAMED cluster keeps its card, so rename and Merge survive', async () => {
+        const r = await run(`() => {
+            mk('a.png', [{box:[0,0,1,1], score:1, c:3}], null, [3]);   // suppressed everywhere
+            mk('b.png', [{box:[0,0,1,1], score:1, c:5}]);
+            mk('c.png', [{box:[0,0,1,1], score:1, c:9}]);
+            aiMeta.clusters = [{id:3, name:'Rob'}, {id:5, name:'Sam'}, {id:9, name:''}];
+            AIC = new Map([[3,'Rob'], [5,'Sam'], [9,'']]);
+            cache.delete('c.png'); fReg.delete('c.png');               // unnamed, files gone
+            setView('faces'); rend();
+            return [...document.querySelectorAll('.face-card')].map(c => c.id);
+        }`);
+        assert.ok(r.includes('fc-3'), 'a named person removed from every photo lost their only card');
+        assert.ok(r.includes('fc-5'));
+        assert.strictEqual(r.includes('fc-9'), false, 'an unnamed cluster with no files left is dropped');
+    });
+
+    test('the merge target list matches what the picker offers', async () => {
+        const r = await run(`() => {
+            mk('a.png', [{box:[0,0,1,1], score:1, c:3}], null, [3]);
+            mk('b.png', [{box:[0,0,1,1], score:1, c:5}]);
+            aiMeta.clusters = [{id:3, name:'Rob'}, {id:5, name:'Sam'}];
+            AIC = new Map([[3,'Rob'], [5,'Sam']]);
+            aiPickPerson({title:'x', exclude:[5]});
+            const offered = [...document.getElementById('personSel').options]
+                .map(o => parseInt(o.value, 10)).filter(n => !isNaN(n));
+            aiPickClose(null);
+            return offered;
+        }`);
+        // aiMergePrompt's guard uses the same !hidden filter, so anything offered is accepted.
+        assert.deepStrictEqual(r, [3], 'picker offered a target aiMergePrompt would reject');
+    });
+
+    test('a hand-made id is allocated above every existing cluster id', async () => {
+        const r = await run(`async () => {
+            aiMeta.clusters = [{id: 1000005, name:'Old'}];
+            aiMeta.nextM = 1000000;
+            return await aiNewPerson('New');
+        }`);
+        assert.strictEqual(r, 1000006, 'nextM alone would have collided with an existing id');
+    });
+});
+
 describe('export / import round trip', () => {
     test('pA, pR, manual clusters and nextM all survive', async () => {
         const r = await run(`async () => {
