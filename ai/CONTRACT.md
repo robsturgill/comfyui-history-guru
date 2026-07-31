@@ -234,6 +234,29 @@ with `sha`/`shaSize`/`shaMtime`. **No schema migration, DB version stays 1.**
 | `faces` | `Array` | `[{box:[x,y,w,h], score, kps:[10 floats], emb:Int8Array(512), embS, c:clusterId}]` |
 | `aiSkip` | `string\|undefined` | Set when the item cannot be analyzed: `'nodecode'` (e.g. `.mkv`), `'toobig'`, `'error'`. Counted separately as "unsupported"; **never retried until `AIV` bumps**. |
 | `aiMs` | `number` | Wall-clock ms for this item's analysis. Diagnostics only. |
+| `pA` | `number[]` | **Manual layer.** Person ids added by hand. Omitted when empty. |
+| `pR` | `number[]` | **Manual layer.** Person ids suppressed by hand. Omitted when empty. |
+
+### The manual layer never touches clusterer-owned state
+
+`aiCluster()` overwrites **every** `faces[].c` from the worker's `assign` array and **replaces**
+`aiMeta.clusters` wholesale, keeping only `name`/`hidden` matched by id. So a hand-correction stored
+as a mutation of `c` is erased by the next Analyze run — silently, hundreds of photos at a time.
+
+`pA`/`pR` exist for exactly that reason. Removing a person writes a **suppression entry**; it never
+edits `c`. The effective set is `(detected ∪ pA) \ pR`, and **every** reader goes through
+`peopleOf(v)` — `popPeople`, `searchFields().face`, `aiClusterMembers`, `aiBuildExport`. Miss one and
+the feature half-works: skip it in `searchFields` and "Show all" for a hand-tagged person returns an
+empty list.
+
+`applyPersonEdit(v,id,act)` (`act` = `'add'|'rm'|'set'`) is the only mutator, shared by the inspector
+and the bulk selection bar. `'set'` removes before it adds, or the incoming id suppresses itself.
+
+`cacheRecordFor(p)` mints a minimal record for a path in `fReg` with nothing in `cache` — reachable
+because `proc()` ends in `catch{}`. Skipping those would tag 9 of 12 selected images while the toast
+claimed 12.
+
+**`AIV` is not bumped for this.** No model, quantization or preprocessing changed.
 
 Embeddings are stored int8 + scale, not float32 — 512 B/vector instead of 2 KB. IndexedDB stores
 typed arrays natively via structured clone; no base64.
@@ -257,9 +280,31 @@ around, and an older copy opening `open(DB,1)` afterwards throws `VersionError`,
   v: AIV,
   backend: { name, device, ms, partitioned },
   lastRun: 1753600000000,
-  clusters: [{ id, name, cent: Int8Array(512), centS, n, rep: 'folder1/x.png', hidden }]
+  nextM: 1000001,                    // monotonic allocator for hand-made person ids
+  clusters: [{ id, name, cent: Int8Array(512), centS, n, rep: 'folder1/x.png', hidden },
+             { id: 1000000, name: 'Ann', manual: true, hidden: false }]
 }
 ```
+
+### Hand-made people
+
+A person the clusterer never found — created from the People view or the picker's `＋ New person…` —
+is a cluster entry with `manual: true` and no centroid.
+
+**Ids come from `nextM`, starting at `MANUAL_ID0 = 1000000`. Never negative.** `c >= 0` and
+"`c < 0` is the noise bucket" checks are spread across the file, and a negative id would be silently
+treated as an unclustered face everywhere.
+
+**`aiCluster()` must `.concat()` the manual entries back** after rebuilding the table from the
+worker's response. The clusterer never emits them, so a plain reassignment deletes every hand-made
+person and orphans every `pA` tag pointing at one. This is covered by `ai/src/people.test.mjs`
+("manual tags and a hand-made person both outlive a cluster rebuild") — that test is the reason the
+file exists, and it fails the moment the `concat` is dropped.
+
+`aiClusterMembers()` reports `pA`-only members as `{i:-1, box:null}`, and `aiDrawCrop` bails on
+`i<0`: such a card renders with fewer crops rather than a broken canvas. `renderFaces` also keeps a
+manual cluster with **zero** members, or a person created by mistake could never be renamed or
+deleted. Deleting one removes the cluster *and* purges its id from every `pA`/`pR` (`aiPurgePerson`).
 
 `dAll()` routes a key starting `_` **and containing no `.`** to `aiLoadMeta(rec)` instead of `cache`.
 The no-dot test is load-bearing: every cache key is a path ending in a media extension, so a real
@@ -353,12 +398,26 @@ Moves an analyzed index to a second machine holding the **same library**. Format
 independent of `AIV`: bump `PORTV` only when the *file layout* changes, `AIV` when the *vectors* do.
 
 ```json
-{ "guruAI": 1, "aiv": 1, "tier": "fp16", "backend": {…}, "exported": 1753…, "count": 8500,
+{ "guruAI": 2, "aiv": 1, "tier": "fp16", "backend": {…}, "exported": 1753…, "count": 8500,
+  "nextM": 1000001,
   "items":    [ {"p":"…", "d":1753…, "ai":1, "emb":"<b64>", "embS":0.012,
-                 "embF":"<b64>", "nF":5, "aiSkip":"nodecode",
+                 "embF":"<b64>", "nF":5, "aiSkip":"nodecode", "pA":[1000000], "pR":[3],
                  "faces":[{"box":[…], "score":…, "kps":[…], "emb":"<b64>", "embS":…, "c":3}]} ],
-  "clusters": [ {"id":3, "name":"Rob", "cent":"<b64>", "centS":…, "n":42, "rep":"…", "hidden":false} ] }
+  "clusters": [ {"id":3, "name":"Rob", "cent":"<b64>", "centS":…, "n":42, "rep":"…", "hidden":false},
+                {"id":1000000, "name":"Ann", "manual":true, "hidden":false} ] }
 ```
+
+**The version check is `j.guruAI > PORTV`, not `!==`.** v1 → v2 was purely additive, so a v1 file
+reads fine with the new keys simply absent. An exact check would make the user's *own* older exports
+unreadable the moment `PORTV` moved — and files in flight between machines is the entire point of
+this feature. A *newer* file this build cannot understand still throws.
+
+**`pA`/`pR` travel as plain number arrays**, no base64, and the export skip guard is
+`ai === undefined && no pA && no pR` — an image tagged by hand but never analyzed carries no `ai`
+stamp and would otherwise be dropped, losing the user's work on the far machine.
+
+`nextM` is merged with `Math.max(local, imported, MANUAL_ID0)` on import — never moves backwards, or
+the next person created locally collides with an imported one.
 
 **Two gates, and only one of them is obvious.**
 
@@ -393,6 +452,9 @@ shown an import that silently did nothing.
 `-1` on every local face *not* covered by the import; leaving it would re-point that face at whoever
 holds the same id in the imported table. Cluster-id remapping across two populated devices is **not**
 implemented and should not be added quietly — it is a merge, not a restore.
+
+**`pA`/`pR` address it too**, and get the same treatment: an id the imported table does not define is
+dropped, counted as `dropped`, and named in both the import confirm and the result toast.
 
 `aiInvalidateMat()` after applying is mandatory. Skip it and the stale packed matrix survives and the
 whole import appears to have done nothing.

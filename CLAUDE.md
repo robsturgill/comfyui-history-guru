@@ -525,7 +525,7 @@ cost real debugging time:
 | `AI:TOKENIZER` / `AI:PREPROC` | Verbatim copies of `ai/src/*.js`, which the worker also `importScripts` — **do not let them diverge**. Tested by `ai/src/*.test.mjs` in Node |
 | `AI:SEARCH` | Packed int8 matrix, `aiQueryVecs`, `aiScore`, `findSimilar` |
 | `AI:PANEL` | Panel, worker plumbing, batch job, video frame sampler |
-| `AI:FACES` | People view, rename, merge, hide. The 👥 toolbar button is the way *back* into it — `aiSearchCluster()` ("Show all") leaves for a search. Cluster ids are surfaced on the card and in the inspector, because `aiMergePrompt()` asks the user to type one |
+| `AI:FACES` | People view, rename, merge, hide, plus the **manual person layer** (see below). The 👥 toolbar button is the way *back* into it — `aiSearchCluster()` ("Show all") leaves for a search. Cluster ids stay surfaced on the card and in the inspector because `aiPickPerson()` accepts one typed, for clusters that were never named |
 | `AI:PORT` | Index export/import. `aiBuildExport` / `aiImportPlan` / `aiImportApply` are split from the picker wrappers so the whole round trip is testable without a native dialog — see CONTRACT §7a for the format and the two refusal gates |
 
 Cache items gain `ai` (a **plain number**, the `AIV` stamp), `emb`/`embS`, `embF`/`nF` for video,
@@ -539,6 +539,26 @@ without discarding any parsed image metadata.
 
 **No AI work happens in `scD()` or `proc()`.** Analysis is an explicit opt-in job, so opening a
 folder is exactly as fast as before.
+
+### The manual person layer, and the one way to break it
+
+`aiCluster()` overwrites **every** `faces[].c` and **replaces** `aiMeta.clusters` on each Analyze
+run. So hand-corrected person assignments cannot live there — they would be erased, silently,
+hundreds of photos at a time. They live in `pA` (added) / `pR` (suppressed) on the cache item, and
+removing a person writes a suppression entry rather than editing `c`.
+
+- `peopleOf(v)` = `(detected ∪ pA) \ pR` and is the **only** reader. Skipping it in
+  `searchFields().face` makes "Show all" return an empty list for a hand-tagged person.
+- `applyPersonEdit(v,id,'add'|'rm'|'set')` is the only mutator — inspector chips and the selection
+  bar's 👤 People… share it. `'set'` removes before it adds.
+- Hand-made people are `clusters[]` entries with `manual:true` and ids from `aiMeta.nextM`, starting
+  at `1000000`. **`aiCluster()` must `.concat()` them back**, and ids must never be negative —
+  `c<0` means noise everywhere in this file.
+- `aiSearchCluster()` queries `face:person-<id>`, never the name: two people can be named "Rob", and
+  the card showing a friendly name is a display concern, not a query one.
+
+`ai/src/people.test.mjs` drives the real page through Playwright against `node serve.mjs` and exists
+mainly for the re-cluster case. Verified by mutation: drop the `.concat(man)` and it fails.
 
 Seeding `cache` alone is **not** enough to test scoring: `aiBuildMat()` filters on `fReg.has(p)`, so
 an item with a perfectly good `emb` that isn't in the file registry never enters the matrix, gets

@@ -2,6 +2,24 @@
 
 All notable changes to the Guru Manager project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Tag people by hand, on a selection or one image at a time.** The ☑ selection bar gains **👤 People…**, which adds, removes or replaces a person across everything selected; the inspector's people chips gain a ✕ to remove and a ＋ to tag. Both save immediately.
+- **Pick people by name, not by id.** One picker serves the inspector, the bulk editor and *Merge…* — a list of named people first, then unnamed clusters with their photo counts. Typing a raw id still works, for clusters nobody has named yet. *Merge…* no longer opens a `prompt()` asking the user to read an id off a card and type it back.
+- **People who were never detected.** **＋ New person** in the People view, and in the picker, creates someone the face clusterer never found, so a photo where no face was detected can still be attributed.
+- **The library remembers list vs grid.** Leaving the People, duplicates or statistics view returns to whichever the user was last in, rather than always dropping into list. Persisted as `guru-view`.
+
+### Fixed
+- **Hand-tagged people survive re-analysis.** `aiCluster()` overwrites every `faces[].c` and replaces the cluster table wholesale, so anything stored there is erased on the next Analyze run. Manual tags live in a separate layer (`pA`/`pR` on the cache item) that clustering never touches, and hand-made people are carried across the rebuild explicitly. Covered by `ai/src/people.test.mjs`, which was verified by mutation — removing the fix fails the test.
+- **"Show all" queries by person id, not by name.** Two people can be given the same name, after which `face:rob` returned the union of both. Cards still display the friendly name.
+- Removing a person from the last photo they appeared in no longer makes them impossible to add back — the picker lists every person, including ones at zero photos.
+- The picker's action radio resets to **Add** on every open, instead of inheriting *Remove* from a previous use.
+
+### Changed
+- Index export format `PORTV` is now **2**, carrying manual tags and hand-made people. The version check accepts older files rather than requiring an exact match, so exports written by 4.7.0 still import.
+- *Clear AI data* now says it removes manual person tags too, and does.
+
 ## [4.7.0] - 2026-07-31
 
 ### Added

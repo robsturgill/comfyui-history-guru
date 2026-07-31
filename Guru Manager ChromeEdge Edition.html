@@ -285,6 +285,23 @@ body.sel-mode .sel-cb{display:block}
 .person-chip:hover{border-color:var(--acc);color:var(--acc)}
 .face-id{font-family:monospace;color:var(--chip-txt);background:var(--ai-chip);border-radius:4px;padding:1px 5px;cursor:pointer}
 .face-id:hover{color:var(--acc)}
+/* Person picker. Shared by the inspector, the selection bar and Merge. */
+.person-dlg{background:var(--side);border:1px solid var(--bd);border-radius:12px;padding:24px;max-width:440px;width:90%;max-height:85vh;overflow-y:auto}
+.person-sel{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:8px;padding:6px;font-size:0.86rem;outline:none}
+.person-sel:focus{border-color:var(--acc)}
+.person-sel option{padding:3px 5px}
+.person-acts{display:flex;gap:14px;margin-top:12px;font-size:0.85rem;color:var(--txt)}
+.person-acts label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.person-idrow{display:flex;align-items:center;gap:8px;margin-top:12px}
+.person-idin{flex:1;background:var(--bg);border:1px solid var(--bd);color:var(--txt);border-radius:6px;padding:5px 8px;font-size:0.85rem;font-family:monospace;outline:none}
+.person-idin:focus{border-color:var(--acc)}
+.person-err{color:var(--ai-bad);font-size:0.8rem;min-height:1.1em;margin-top:6px}
+/* Editable person chips in the inspector. The × is a child of a chip that is itself clickable, so
+   it stops propagation rather than relying on layout to keep the two hit areas apart. */
+.chip-x{margin-left:6px;color:var(--mut);cursor:pointer;font-weight:700}
+.chip-x:hover{color:var(--ai-bad)}
+.chip-add{cursor:pointer;border-style:dashed;color:var(--mut)}
+.chip-add:hover{border-color:var(--acc);color:var(--acc)}
 /* --- /AI:CSS --- */
 </style>
 </head>
@@ -380,6 +397,7 @@ body.sel-mode .sel-cb{display:block}
             <span class="spacer"></span>
             <button class="dup-btn" onclick="selectAllListed()">Select all</button>
             <button class="dup-btn" onclick="clearSelection()">Clear</button>
+            <button id="selPeopleBtn" class="dup-btn" onclick="aiBulkPeople()" disabled>👤 People…</button>
             <button id="selDelBtn" class="dup-btn danger" onclick="deleteSelection()" disabled>Delete 0</button>
             <button class="dup-btn" onclick="toggleSelectMode(false)">Done</button>
         </div>
@@ -464,6 +482,30 @@ body.sel-mode .sel-cb{display:block}
         <div id="helpContent"></div>
     </div>
 </div>
+<div id="personOverlay" class="overlay hidden">
+    <div class="person-dlg">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 id="personTitle" style="color:var(--acc);margin:0;font-size:1.05rem;">Choose a person</h2>
+            <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt);" onclick="aiPickClose(null)">✕</button>
+        </div>
+        <select id="personSel" class="person-sel" size="8"></select>
+        <div id="personActs" class="person-acts" style="display:none">
+            <label><input type="radio" name="personAct" value="add" checked> Add</label>
+            <label><input type="radio" name="personAct" value="rm"> Remove</label>
+            <label><input type="radio" name="personAct" value="set"> Replace with</label>
+        </div>
+        <div class="person-idrow">
+            <span class="ai-dim">or type an id</span>
+            <input id="personId" class="person-idin" placeholder="e.g. 12" onkeydown="if(event.key==='Enter')aiPickGo()">
+        </div>
+        <div id="personErr" class="person-err"></div>
+        <div class="ai-actions">
+            <button id="personGo" class="dup-btn primary" onclick="aiPickGo()">Apply</button>
+            <button id="personNew" class="dup-btn" onclick="aiPickNew()">＋ New person…</button>
+            <button class="dup-btn" onclick="aiPickClose(null)">Cancel</button>
+        </div>
+    </div>
+</div>
 <div id="aiOverlay" class="overlay hidden">
     <div style="background:var(--side);border:1px solid var(--bd);border-radius:12px;padding:26px;max-width:720px;width:90%;max-height:85vh;overflow-y:auto;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
@@ -477,7 +519,11 @@ body.sel-mode .sel-cb{display:block}
 <script>
 // STATE
 let rH=null,db=null,cache=new Map(),fReg=new Map(),dReg=new Map(),objURLs=new Set();
-let cDir=null,currP="",cFiles=[],vMode='list',aIdx=-1,cItem=null,favorites=new Set(),showFavoritesOnly=false,sortBy='date',sortDirection='desc',selectedIndex=-1,selectedItems=new Set();
+// libView is the last LIBRARY view (list/grid) the user chose. stats/dups/faces are excursions, and
+// every way back out of them returns here rather than forcing 'list' - leaving a grid user in list
+// after every "Show all" was the bug.
+let libView=localStorage.getItem('guru-view')==='grid'?'grid':'list';
+let cDir=null,currP="",cFiles=[],vMode=libView,aIdx=-1,cItem=null,favorites=new Set(),showFavoritesOnly=false,sortBy='date',sortDirection='desc',selectedIndex=-1,selectedItems=new Set();
 let currentLoras = [];
 let pageSize=200, curPage=0, mediaIO=null;
 
@@ -1232,9 +1278,12 @@ async function backfillDim(h,p){const it=cache.get(p);
     if(!it||it.dim!==undefined)return;
     try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
 
-function setView(m){vMode=m;document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const pB=document.getElementById('peopleBtn');if(pB)pB.classList.toggle('active',m==='faces');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
+function setView(m){vMode=m;if(m==='list'||m==='grid'){libView=m;localStorage.setItem('guru-view',m)}document.getElementById('bStats').classList.toggle('active',m==='stats');const dupB=document.getElementById('dupBtn');if(dupB)dupB.classList.toggle('active',m==='dups');const pB=document.getElementById('peopleBtn');if(pB)pB.classList.toggle('active',m==='faces');const vt=document.getElementById('viewToggle');if(vt)vt.textContent=m==='grid'?'☰':'🔲';rend()}
 function toggleView(){setView(vMode==='grid'?'list':'grid')}
-function toggleStats(){setView(vMode==='stats'?'list':'stats')}
+function toggleStats(){setView(vMode==='stats'?libView:'stats')}
+// The single way back out of an excursion view. Named rather than inlined because renderFaces builds
+// its back button as an HTML string, and an inline libView read there would capture at render time.
+function backToLibrary(){setView(libView)}
 function renderStats(container){const stats={models:new Map(),samplers:new Map(),loras:new Map(),sizes:new Map(),cfgs:new Map(),steps:new Map(),totalImages:0,aiImages:0};for(const [path,item] of cache.entries()){if(!item.m)continue;stats.totalImages++;const meta=item.m.meta||{};const resources=item.m.resources||[];if(meta.model&&meta.model!=="?"){stats.aiImages++;stats.models.set(meta.model,(stats.models.get(meta.model)||0)+1)}if(meta.sampler&&meta.sampler!=="?")stats.samplers.set(meta.sampler,(stats.samplers.get(meta.sampler)||0)+1);const dispSize=item.dim||meta.size;if(dispSize&&dispSize!=="?")stats.sizes.set(dispSize,(stats.sizes.get(dispSize)||0)+1);if(meta.cfg&&meta.cfg!=="?"){const cfg=parseFloat(meta.cfg);if(!isNaN(cfg)){const cfgKey=cfg.toFixed(1);stats.cfgs.set(cfgKey,(stats.cfgs.get(cfgKey)||0)+1)}}if(meta.steps&&meta.steps!=="?"){const steps=parseInt(meta.steps);if(!isNaN(steps))stats.steps.set(steps.toString(),(stats.steps.get(steps.toString())||0)+1)}resources.forEach(res=>{if(res.type==='LoRA'&&res.name)stats.loras.set(res.name,(stats.loras.get(res.name)||0)+1)})}const statsHtml=`<div style="padding:20px;max-width:1200px;margin:0 auto;"><h2 style="color:var(--txt);margin-bottom:30px;">📊 Metadata Statistics</h2><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;"><div class="stat-card"><h3>📈 Overview</h3><div class="stat-item">Total Images: <strong>${stats.totalImages}</strong></div><div class="stat-item">AI Images: <strong>${stats.aiImages}</strong></div><div class="stat-item">Non-AI Images: <strong>${stats.totalImages-stats.aiImages}</strong></div><div class="stat-item">AI Coverage: <strong>${stats.totalImages?Math.round((stats.aiImages/stats.totalImages)*100):0}%</strong></div></div><div class="stat-card"><h3>🎨 Top Models</h3>${Array.from(stats.models.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([model,count])=>`<div class="stat-item">${model}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No model data</div>'}</div><div class="stat-card"><h3>🔧 Top LoRAs</h3>${Array.from(stats.loras.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([lora,count])=>`<div class="stat-item">${lora}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No LoRA data</div>'}</div><div class="stat-card"><h3>⚙️ Samplers</h3>${Array.from(stats.samplers.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([sampler,count])=>`<div class="stat-item">${sampler}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No sampler data</div>'}</div><div class="stat-card"><h3>📐 Image Sizes</h3>${Array.from(stats.sizes.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([size,count])=>`<div class="stat-item">${size}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No size data</div>'}</div><div class="stat-card"><h3>🎛️ CFG Scale</h3>${Array.from(stats.cfgs.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cfg,count])=>`<div class="stat-item">${cfg}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No CFG data</div>'}</div><div class="stat-card"><h3>🔄 Steps</h3>${Array.from(stats.steps.entries()).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([steps,count])=>`<div class="stat-item">${steps}: <strong>${count}</strong></div>`).join('')||'<div class="stat-item">No steps data</div>'}</div></div></div>`;container.innerHTML=statsHtml}
 function toggleTheme(){const body=document.body;const currentTheme=body.getAttribute('data-theme')||'dark';const newTheme=currentTheme==='dark'?'light':'dark';body.setAttribute('data-theme',newTheme);localStorage.setItem('guru-theme',newTheme);const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=newTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${newTheme==='dark'?'Light':'Dark'} Mode`}}
 // The .collapsed class is also driven by the detail view, which hides the sidebar whatever the user
@@ -1262,7 +1311,10 @@ function toggleThumbnails(){const isOff=document.body.classList.toggle('no-thumb
 })();
 function updateThumbUI(show){const indicator=document.getElementById('thumbIndicator');if(indicator)indicator.style.color=show?'#4ade80':'#ef4444'}
 function updateThumbSize(val){document.documentElement.style.setProperty('--thumb-size',val+'px');localStorage.setItem('guru-thumb-size',val)}
-(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');setTimeout(()=>updateThumbUI(false),100)}setTimeout(syncSortUI,0);setTimeout(applySidebar,0)})();
+(function(){const savedTheme=localStorage.getItem('guru-theme')||'dark';document.body.setAttribute('data-theme',savedTheme);const savedSize=localStorage.getItem('guru-thumb-size');if(savedSize){updateThumbSize(savedSize);setTimeout(()=>{const slider=document.getElementById('thumbSlider');if(slider)slider.value=savedSize},100)}const toggleBtn=document.getElementById('themeToggle');if(toggleBtn){toggleBtn.textContent=savedTheme==='dark'?'🌙':'☀️';toggleBtn.title=`Switch to ${savedTheme==='dark'?'Light':'Dark'} Mode`}const savedFavorites=localStorage.getItem('guru-favorites');if(savedFavorites){favorites=new Set(JSON.parse(savedFavorites))}const savedPage=localStorage.getItem('guru-page-size');if(savedPage!==null)pageSize=+savedPage||0;const thumbPref=localStorage.getItem('guru-thumbnails')||'on';if(thumbPref==='off'){document.body.classList.add('no-thumbnails');vMode=libView='list';setTimeout(()=>updateThumbUI(false),100)}setTimeout(syncSortUI,0);setTimeout(applySidebar,0);
+// vMode was restored from guru-view at declaration, so the toolbar glyph has to be brought into
+// agreement with it - setView() is what normally does that, and nothing has called it yet.
+setTimeout(()=>{const vt=document.getElementById('viewToggle');if(vt)vt.textContent=vMode==='grid'?'☰':'🔲'},0)})();
 function toggleFavorite(path){if(favorites.has(path)){favorites.delete(path)}else{favorites.add(path)}localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));rend()}
 // ===================== DUPLICATE DETECTION =====================
 // Content-based, filename-independent, spans every subfolder under the opened root.
@@ -1345,7 +1397,7 @@ function setDupProgress(phase,done,total){
 
 // Header button: toggles out of the view, otherwise kicks off a fresh scan.
 function findDuplicates(){
-    if(vMode==='dups'&&!dupScanState){setView('list');return}
+    if(vMode==='dups'&&!dupScanState){backToLibrary();return}
     if(!rH||fReg.size===0){showToast('Open a folder first.','error');return}
     scanDuplicates()
 }
@@ -1637,7 +1689,7 @@ async function contextDelete(){
         showToast('Deleted successfully','success')
     }catch(e){showToast('Delete failed: '+e.message,'error')}
 }
-function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete the selection, or the open image</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>B</kbd> Show / hide the directories panel</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div><div><strong>☑ Selection mode</strong> Click to select, no key held</div><div><strong>Double-click</strong> Open an image in selection mode</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>👥 People</strong> Review face groups (needs the launcher)</div><div><strong>☑ Selection</strong> Multi-select, then delete the lot</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
+function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete the selection, or the open image</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>B</kbd> Show / hide the directories panel</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div><div><strong>☑ Selection mode</strong> Click to select, no key held</div><div><strong>Double-click</strong> Open an image in selection mode</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>👥 People</strong> Review face groups (needs the launcher)</div><div><strong>👤 People…</strong> Tag the selection — add, remove or replace a person</div><div><strong>Inspector chips</strong> ✕ removes a person, ＋ tags one</div><div><strong>☑ Selection</strong> Multi-select, then delete the lot</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div><div>• Name a face group once, then pick it by name everywhere — the id still works if you prefer</div><div>• Hand-made people and hand tags survive re-analysis; only \"Clear AI data\" removes them</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
@@ -1841,6 +1893,9 @@ function syncSelUI(){
     if(cnt)cnt.textContent=n?`${n} selected`:'Nothing selected';
     const db=document.getElementById('selDelBtn');
     if(db){db.disabled=!n;db.textContent=`Delete ${n}`}
+    // Stays disabled on file://, where there is no AI data to tag against - same as the dimmed 🧠.
+    const pb=document.getElementById('selPeopleBtn');
+    if(pb)pb.disabled=!n||!aiOK();
 }
 function clearSelection(){selectedItems.clear();selectedIndex=-1;syncSelUI()}
 function selectAllListed(){cFiles.forEach(f=>selectedItems.add(f.p));syncSelUI()}
@@ -2090,15 +2145,34 @@ function pop(f,mt){
     popPeople(mt);
     if(document.body.classList.contains('mode-list'))togInsp(true);
 }
-// Who the face clusterer found in this image. One image can hold several detections of the same
-// person, so the ids are de-duplicated; c<0 is the noise bucket and is not a person yet.
+// Who is in this image - what the clusterer found, plus hand tags, minus hand removals. One image
+// can hold several detections of the same person, so peopleOf() de-duplicates; c<0 is the noise
+// bucket and is not a person yet. Editable: each chip removes, and the trailing + adds.
 function popPeople(mt){
     const wrap=document.getElementById('mPeopleWrap'),box=document.getElementById('mPeople');
     if(!wrap||!box)return;
-    const ids=[...new Set(((mt&&mt.faces)||[]).map(x=>x.c).filter(c=>c>=0))];
-    if(!aiOK()||!ids.length){wrap.style.display='none';box.innerHTML='';return}
-    box.innerHTML=ids.map(c=>`<span class="chip person-chip" onclick="peopleFromDetail(${c})" title="Show every photo of this person">${esc(AIC.get(c)||('person-'+c))}<span class="chip-badge">id ${c}</span></span>`).join('');
+    // No !ids.length bail any more - the section has to render empty so an untagged image can be
+    // tagged. It stays gated on aiOK(), like every other AI affordance.
+    if(!aiOK()){wrap.style.display='none';box.innerHTML='';return}
+    const ids=peopleOf(mt);
+    box.innerHTML=ids.map(c=>`<span class="chip person-chip" onclick="peopleFromDetail(${c})" title="Show every photo of this person">${esc(AIC.get(c)||('person-'+c))}<span class="chip-badge">id ${c}</span><span class="chip-x" onclick="event.stopPropagation();personFromDetail('rm',${c})" title="Remove this person from this image">✕</span></span>`).join('')
+        +`<span class="chip chip-add" onclick="personFromDetail('add')" title="Tag someone in this image">＋ add person</span>`;
     wrap.style.display='';
+}
+// Saves on change, with no separate Save button - the cluster-name input and the favourite star
+// already behave this way, and a pending-edit state is one more thing to get wrong.
+async function personFromDetail(act,c){
+    if(!cItem)return;
+    let id=c;
+    if(act==='add'){
+        const r=await aiPickPerson({title:'Tag someone in this image',confirmLabel:'Add',exclude:peopleOf(cache.get(cItem.p))});
+        if(!r)return;id=r.id;
+    }
+    const v=cacheRecordFor(cItem.p);if(!v)return;
+    if(!applyPersonEdit(v,id,act))return;
+    await dPut(v);
+    popPeople(v);
+    showToast(act==='rm'?`Removed ${esc(AIC.get(id)||('person-'+id))}.`:`Tagged ${esc(AIC.get(id)||('person-'+id))}.`,'success');
 }
 // exitDetail() first: aiSearchCluster() calls setView('list') -> rend(), which would otherwise
 // rebuild the grid behind a detail overlay that is still up.
@@ -2114,6 +2188,13 @@ document.addEventListener('keydown',e=>{
     }
     // Same reasoning as the JSON dialog: the AI panel is a modal, so Escape must close it whatever
     // has focus. Placed before the input guard, or focus in the rename box would swallow it.
+    // Before the AI panel's own check: the picker can be opened from on top of it (Merge), and it
+    // holds an <input> and a <select>, so the input guard below would otherwise eat Escape.
+    const po=document.getElementById('personOverlay');
+    if(po&&!po.classList.contains('hidden')){
+        if(e.key==='Escape'){e.preventDefault();aiPickClose(null)}
+        return;
+    }
     const ao=document.getElementById('aiOverlay');
     if(ao&&!ao.classList.contains('hidden')){
         if(e.key==='Escape'){e.preventDefault();hideAI()}
@@ -2506,9 +2587,9 @@ function searchFields(p,v){
         // Names resolve at query time from AIC, never denormalized onto the record - a rename would
         // otherwise have to rewrite hundreds of items. Both the name and the stable auto-label go in,
         // so face:rob and face:person-12 each match, and a multi-person image matches all of them.
-        // c<0 is the noise bucket (a face too isolated to be a person yet). Including it would
-        // emit the literal token "person--1" and make every unclustered face match face:person.
-        face:(v.faces||[]).filter(x=>x.c>=0).map(x=>`${AIC.get(x.c)||'unnamed'} person-${x.c}`).join(' ').toLowerCase()};
+        // c<0 is the noise bucket (a face too isolated to be a person yet). peopleOf() drops it, or
+        // the literal token "person--1" would make every unclustered face match face:person.
+        face:peopleOf(v).map(c=>`${AIC.get(c)||'unnamed'} person-${c}`).join(' ').toLowerCase()};
     f.all=[f.name,f.path,f.prompt,f.neg,f.model,f.sampler,f.seed,f.steps,f.cfg,f.size,f.lora,f.face].join('  ');
     return f;
 }
@@ -3258,7 +3339,10 @@ async function aiCluster(){
     aiMeta=aiMeta||{p:'__ai__'};
     aiMeta.v=AIV;aiMeta.lastRun=Date.now();aiMeta.backend=aiBackend;
     const old=new Map((aiMeta.clusters||[]).map(c=>[c.id,c]));
-    aiMeta.clusters=(r.clusters||[]).map(c=>({...c,name:(old.get(c.id)||{}).name||'',hidden:(old.get(c.id)||{}).hidden||false}));
+    // Hand-made people are never emitted by the clusterer, so a plain reassignment of this array
+    // would delete them - and with them every pA tag pointing at one. Carry them across verbatim.
+    const man=(aiMeta.clusters||[]).filter(c=>c.manual);
+    aiMeta.clusters=(r.clusters||[]).map(c=>({...c,name:(old.get(c.id)||{}).name||'',hidden:(old.get(c.id)||{}).hidden||false})).concat(man);
     AIC=new Map(aiMeta.clusters.map(c=>[c.id,c.name||'']));
     await dPut(aiMeta);
 }
@@ -3332,10 +3416,12 @@ function aiPaint(){
     if(aiJob)aiPaintProgress();
 }
 async function aiClearData(){
-    if(!confirm('Remove all AI embeddings, faces and people names? The images themselves are untouched.'))return;
+    if(!confirm('Remove all AI embeddings, faces, people names and manual person tags? The images themselves are untouched.'))return;
     const upd=[];
-    for(const[p,v]of cache){if(v&&(v.emb||v.faces||v.ai!==undefined)){
-        delete v.emb;delete v.embS;delete v.embF;delete v.nF;delete v.faces;delete v.ai;delete v.aiSkip;delete v.aiMs;upd.push(v)}}
+    // pA/pR are in the guard as well as the delete list: an image tagged by hand but never analyzed
+    // has no emb, no faces and no `ai`, and would otherwise be skipped with its tag left behind.
+    for(const[p,v]of cache){if(v&&(v.emb||v.faces||v.pA||v.pR||v.ai!==undefined)){
+        delete v.emb;delete v.embS;delete v.embF;delete v.nF;delete v.faces;delete v.ai;delete v.aiSkip;delete v.aiMs;delete v.pA;delete v.pR;upd.push(v)}}
     await dPutMany(upd);
     if(aiMeta){await dDel('__ai__');aiMeta=null}
     AIC=new Map();aiInvalidateMat();aiTxtCache.clear();
@@ -3349,7 +3435,9 @@ async function aiClearData(){
 // same library. Matching is by path + lastModified. There is deliberately NO content hashing: that
 // is the exact cost the duplicate scanner's three-stage design exists to avoid, and a file that
 // really did change SHOULD fall out and be re-analyzed rather than keep a stale vector.
-const PORTV=1;
+// 2 adds the manual person layer (pA/pR, manual clusters, nextM). Purely additive, so a v1 file
+// still reads - see the version check in aiImportPlan.
+const PORTV=2;
 
 // Int8Array <-> base64. IndexedDB stores typed arrays natively but JSON cannot, and writing them as
 // plain number arrays costs roughly 4x the bytes.
@@ -3370,7 +3458,9 @@ function b64dec(s){
 function aiBuildExport(){
     const items=[];
     for(const[p,v]of cache){
-        if(!v||v.ai===undefined)continue;             // never analyzed - nothing to carry
+        // An image tagged by hand but never analyzed has no `ai` stamp and would otherwise be
+        // dropped from the export, losing the user's work on the far machine.
+        if(!v||(v.ai===undefined&&!(v.pA&&v.pA.length)&&!(v.pR&&v.pR.length)))continue;
         const o={p,d:v.d,ai:v.ai};
         if(v.aiSkip)o.aiSkip=v.aiSkip;                // travels, or the far end re-fails every .mkv
         if(v.emb){o.emb=b64enc(v.emb);o.embS=v.embS}
@@ -3378,10 +3468,12 @@ function aiBuildExport(){
         if(v.faces&&v.faces.length)o.faces=v.faces.map(f=>({
             box:f.box,score:f.score,kps:f.kps,c:f.c,
             emb:f.emb?b64enc(f.emb):null,embS:f.embS}));
+        if(v.pA&&v.pA.length)o.pA=v.pA;               // plain number arrays, no base64 needed
+        if(v.pR&&v.pR.length)o.pR=v.pR;
         items.push(o);
     }
     const cl=(aiMeta&&aiMeta.clusters||[]).map(c=>({
-        id:c.id,name:c.name||'',n:c.n,rep:c.rep,hidden:!!c.hidden,
+        id:c.id,name:c.name||'',n:c.n,rep:c.rep,hidden:!!c.hidden,manual:!!c.manual,
         cent:c.cent?b64enc(c.cent):null,centS:c.centS}));
     // aiBackend is live but null until the worker probes; aiMeta.backend is the persisted copy, so a
     // library indexed in an earlier session still exports a verifiable tier.
@@ -3390,14 +3482,17 @@ function aiBuildExport(){
     // packs everything in `cache` into one matrix, so a mix ranks garbage without ever failing.
     const tier=(bk&&bk.tier)||null;
     return{count:items.length,people:cl.length,tier,json:JSON.stringify({
-        guruAI:PORTV,aiv:AIV,tier,
+        guruAI:PORTV,aiv:AIV,tier,nextM:(aiMeta&&aiMeta.nextM)||undefined,
         backend:bk?{name:bk.name,device:bk.device||null,tier:bk.tier||null}:null,
         exported:Date.now(),count:items.length,items,clusters:cl})};
 }
 // Parses and classifies, but writes nothing - so the caller can put real numbers in the confirm.
 function aiImportPlan(txt){
     let j;try{j=JSON.parse(txt)}catch(e){throw new Error('That file is not a Guru AI index (invalid JSON).')}
-    if(!j||j.guruAI!==PORTV)throw new Error('Unrecognized export format'+(j&&j.guruAI?' (v'+j.guruAI+')':'')+'.');
+    // Not an equality test. Every version so far has been purely additive, so an older file reads
+    // fine with the new keys simply absent - and an exact check would make the user's own v1 exports
+    // unreadable the moment PORTV moved. A NEWER file this build cannot understand still throws.
+    if(!j||!j.guruAI||j.guruAI>PORTV)throw new Error('Unrecognized export format'+(j&&j.guruAI?' (v'+j.guruAI+')':'')+'.');
     if(j.aiv!==AIV)throw new Error('Built with model version '+j.aiv+', this app is on '+AIV+'.\nThe vectors are not comparable - re-analyze on this machine instead.');
     const local=(aiBackend&&aiBackend.tier)||null;
     if(j.tier&&local&&j.tier!==local)
@@ -3409,7 +3504,7 @@ function aiImportPlan(txt){
         (o.d!=null&&v.d!=null&&o.d!==v.d?changed:hit).push([v,o]);
     }
     return{hit,changed,missing,total:(j.items||[]).length,exported:j.exported,backend:j.backend,
-        tierKnown:!!(j.tier&&local),
+        tierKnown:!!(j.tier&&local),nextM:j.nextM,
         clusters:(j.clusters||[]).map(c=>{const g={...c};g.cent=c.cent?b64dec(c.cent):undefined;return g})};
 }
 async function aiImportApply(plan,opt){
@@ -3420,6 +3515,7 @@ async function aiImportApply(plan,opt){
         // Replace this item's AI layer wholesale. A field-by-field merge could leave an embedding
         // from one analysis sitting beside faces from another.
         delete v.emb;delete v.embS;delete v.embF;delete v.nF;delete v.faces;delete v.aiSkip;delete v.aiMs;
+        delete v.pA;delete v.pR;
         v.ai=o.ai;
         if(o.aiSkip)v.aiSkip=o.aiSkip;
         if(o.emb){v.emb=b64dec(o.emb);v.embS=o.embS}
@@ -3428,29 +3524,42 @@ async function aiImportApply(plan,opt){
             const g={box:f.box,score:f.score,kps:f.kps,c:f.c};
             if(f.emb){g.emb=b64dec(f.emb);g.embS=f.embS}
             return g});
+        if(o.pA&&o.pA.length)v.pA=o.pA.slice();
+        if(o.pR&&o.pR.length)v.pR=o.pR.slice();
         upd.push(v);seen.add(v.p);
     }
     // faces[].c addresses the cluster table it was written against. Any face NOT covered by the
     // import still carries an id from this machine's own clustering, which under the imported table
     // means a different person - so it goes back to noise rather than inheriting a stranger's name.
-    let orphaned=0;
-    if(plan.clusters.length)for(const[p,v]of cache){
-        if(seen.has(p)||!v||!v.faces)continue;
-        let t=false;v.faces.forEach(f=>{if(f.c>=0){f.c=-1;t=true}});
-        if(t){orphaned++;upd.push(v)}
+    let orphaned=0,dropped=0;
+    if(plan.clusters.length){
+        const known=new Set(plan.clusters.map(c=>c.id));
+        for(const[p,v]of cache){
+            if(seen.has(p)||!v)continue;
+            let t=false;(v.faces||[]).forEach(f=>{if(f.c>=0){f.c=-1;t=true}});
+            if(t){orphaned++}
+            // Manual tags address the same replaced table, so an id the import does not define is
+            // now a stranger. Drop it rather than let it point at someone else's person.
+            for(const k of['pA','pR'])if(v[k]){
+                const n=v[k].filter(c=>known.has(c));
+                if(n.length!==v[k].length){dropped++;t=true;if(n.length)v[k]=n;else delete v[k]}}
+            if(t)upd.push(v);
+        }
     }
     for(let i=0;i<upd.length;i+=500)await dPutMany(upd.slice(i,i+500));
     if(plan.clusters.length){
         aiMeta=aiMeta||{p:'__ai__'};
         aiMeta.v=AIV;aiMeta.clusters=plan.clusters;aiMeta.lastRun=plan.exported||Date.now();
         if(plan.backend)aiMeta.backend=plan.backend;
+        // Never moves backwards, or the next person created here collides with an imported one.
+        aiMeta.nextM=Math.max(aiMeta.nextM||0,plan.nextM||0,MANUAL_ID0);
         AIC=new Map(plan.clusters.map(c=>[c.id,c.name||'']));
         await dPut(aiMeta);
     }
     // Without this the packed scoring matrix survives and the import appears to have done nothing.
     aiInvalidateMat();aiTxtCache.clear();
     return{imported:pairs.length,missing:plan.missing.length,
-        skipped:opt.includeChanged?0:plan.changed.length,orphaned};
+        skipped:opt.includeChanged?0:plan.changed.length,orphaned,dropped};
 }
 async function aiExportIndex(){
     if(!aiOK()){showToast('AI export needs the local launcher — run node serve.mjs.','info');return}
@@ -3507,7 +3616,8 @@ async function aiImportIndex(){
     const nCl=plan.clusters.length,localCl=(aiMeta&&aiMeta.clusters||[]).length;
     let msg=lines.join('\n')+`\n\nImport ${n.toLocaleString()} items`
         +(nCl?` and ${nCl} ${nCl===1?'person':'people'}`:'')+'?';
-    if(nCl&&localCl)msg+=`\n\nThe ${localCl} ${localCl===1?'person':'people'} already on this device will be replaced — the imported faces refer to the imported ids.`;
+    if(nCl&&localCl)msg+=`\n\nThe ${localCl} ${localCl===1?'person':'people'} already on this device will be replaced — the imported faces refer to the imported ids.`
+        +`\nAny person tag added by hand here that the import does not define is dropped for the same reason.`;
     if(!confirm(msg))return;
     document.getElementById('load').classList.remove('hidden');
     let r;
@@ -3516,45 +3626,99 @@ async function aiImportIndex(){
     finally{document.getElementById('load').classList.add('hidden')}
     aiPaint();if(vMode==='faces')rend();
     showToast(`Imported ${r.imported.toLocaleString()} · ${r.missing.toLocaleString()} not found · ${r.skipped.toLocaleString()} changed`
-        +(r.orphaned?` · ${r.orphaned.toLocaleString()} local faces reset to unnamed`:''),'success');
+        +(r.orphaned?` · ${r.orphaned.toLocaleString()} local faces reset to unnamed`:'')
+        +(r.dropped?` · ${r.dropped.toLocaleString()} local person tags dropped`:''),'success');
 }
 // --- /AI:PORT ---
 
 // --- AI:FACES ---
+// The manual layer. aiCluster() overwrites EVERY faces[].c and replaces aiMeta.clusters wholesale on
+// each Analyze run, so anything hand-corrected in there is erased. Manual work therefore lives in two
+// arrays the clusterer never touches: pA (added) and pR (suppressed). Removing a person is a
+// suppression entry, never a mutation of c.
+// Effective set = (detected ∪ pA) \ pR. Every reader of person data goes through here.
+function peopleOf(v){
+    if(!v)return[];
+    const s=new Set((v.faces||[]).map(x=>x.c).filter(c=>c>=0));
+    for(const c of(v.pA||[]))s.add(c);
+    for(const c of(v.pR||[]))s.delete(c);
+    return[...s].sort((a,b)=>a-b);
+}
+// The single mutator - the inspector calls it with one item, the bulk path with many. act is
+// 'add' | 'rm' | 'set'. Empty arrays are deleted rather than stored, so an untagged library costs
+// nothing per record. Returns true when the item actually changed.
+function applyPersonEdit(v,id,act){
+    if(!v)return false;
+    const det=new Set((v.faces||[]).map(x=>x.c).filter(c=>c>=0));
+    let A=new Set(v.pA||[]),R=new Set(v.pR||[]);
+    const rm=c=>{A.delete(c);if(det.has(c))R.add(c)};
+    // 'set' clears first and adds second, or the incoming id is suppressed by its own removal pass
+    // when the image already had it.
+    if(act==='set')for(const c of peopleOf(v))rm(c);
+    if(act==='rm')rm(id);else{R.delete(id);if(!det.has(id))A.add(id)}
+    const before=JSON.stringify([v.pA||[],v.pR||[]]);
+    if(A.size)v.pA=[...A].sort((a,b)=>a-b);else delete v.pA;
+    if(R.size)v.pR=[...R].sort((a,b)=>a-b);else delete v.pR;
+    return JSON.stringify([v.pA||[],v.pR||[]])!==before;
+}
+// proc() ends in catch{}, so a file that threw while being read sits in fReg with nothing in cache.
+// Skipping those would tag 9 of 12 selected images while the toast claimed 12; mint the record
+// instead, in the same minimum shape proc() writes.
+function cacheRecordFor(p){
+    let v=cache.get(p);
+    if(!v){const h=fReg.get(p);if(!h)return null;
+        v={p,n:h.name,d:0};cache.set(p,v)}
+    return v;
+}
 // Members are derived from the cache rather than stored on the cluster, so a rename or merge never
 // has to rewrite hundreds of file records - it touches only the __ai__ sentinel.
 function aiClusterMembers(){
     const m=new Map();
     for(const[p,v]of cache){
-        if(!v||!v.faces||!fReg.has(p))continue;
-        v.faces.forEach((f,i)=>{if(f.c==null)return;
+        if(!v||!fReg.has(p))continue;
+        const sup=new Set(v.pR||[]);
+        (v.faces||[]).forEach((f,i)=>{if(f.c==null||sup.has(f.c))return;
             if(!m.has(f.c))m.set(f.c,[]);
             m.get(f.c).push({p,i,box:f.box,score:f.score||0})});
+        // Hand-tagged images have no detection, so no box - i:-1 tells aiDrawCrop to bail rather
+        // than paint a broken canvas. A person tagged only by hand still gets a card, with fewer crops.
+        for(const c of(v.pA||[])){if(sup.has(c))continue;
+            if(!m.has(c))m.set(c,[]);
+            if(!m.get(c).some(x=>x.p===p))m.get(c).push({p,i:-1,box:null,score:0})}
     }
     return m;
 }
 function renderFaces(c){
     if(!aiOK()){c.innerHTML='<div class="json-empty">AI features need the local launcher — run <code>node serve.mjs</code>.</div>';return}
     const mem=aiClusterMembers();
-    const cl=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&mem.has(x.id))
-        .sort((a,b)=>(mem.get(b.id).length)-(mem.get(a.id).length));
+    // A manual person survives with no photos yet - it still needs a card, or there is no way to
+    // rename or delete one created by mistake.
+    const cl=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&(mem.has(x.id)||x.manual))
+        .sort((a,b)=>((mem.get(b.id)||[]).length)-((mem.get(a.id)||[]).length));
     document.getElementById('fCount').innerText=`${cl.length} people`;
-    if(!cl.length){c.innerHTML='<div class="json-empty">No people found yet. Open the 🧠 panel and run Analyze.</div>';return}
+    if(!cl.length){c.innerHTML=`<div class="json-empty">No people found yet. Open the 🧠 panel and run Analyze.<br><br>
+        <button class="dup-btn" onclick="aiNewPersonPrompt()">＋ New person</button></div>`;return}
     // Sticky bar reuses .dup-bar/.dup-btn verbatim - no new CSS, correct in light mode by construction.
-    c.innerHTML=`<div class="dup-bar"><div><b>${cl.length}</b> people · ${[...mem.values()].reduce((s,a)=>s+a.length,0)} faces</div>
-        <div style="margin-left:auto"><button class="dup-btn" onclick="setView('list')">← Back to library</button></div></div>
+    // Counted over the displayed clusters only - mem also holds the c==-1 noise bucket, and one image
+    // can contribute several detections, so a naive sum over mem.values() is neither.
+    const nPh=new Set();for(const x of cl)for(const r of(mem.get(x.id)||[]))nPh.add(r.p);
+    c.innerHTML=`<div class="dup-bar"><div><b>${cl.length}</b> people · ${nPh.size} photos</div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="dup-btn" onclick="aiNewPersonPrompt()">＋ New person</button>
+          <button class="dup-btn" onclick="backToLibrary()">← Back to library</button></div></div>
       <div class="faces-grid">`+cl.map(x=>{
-        const ms=mem.get(x.id),rep=ms.slice().sort((a,b)=>b.score-a.score).slice(0,4);
+        const ms=mem.get(x.id)||[];
+        const rep=ms.slice().filter(r=>r.i>=0).sort((a,b)=>b.score-a.score).slice(0,4);
         const nm=AIC.get(x.id)||'';
         return `<div class="face-card" id="fc-${x.id}">
           <div class="face-crops">${rep.map(r=>`<canvas class="face-crop" data-p="${esc(r.p)}" data-i="${r.i}"></canvas>`).join('')}</div>
           <input class="face-name" value="${esc(nm)}" placeholder="+ add name"
                  onchange="aiRenameCluster(${x.id},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
-          <div class="ai-dim">${ms.length} photo${ms.length===1?'':'s'} · <span class="face-id" onclick="aiCopyId(${x.id})" title="Person id — the number Merge… asks for. Click to copy.">id ${x.id}</span></div>
+          <div class="ai-dim">${ms.length} photo${ms.length===1?'':'s'}${x.manual?' · hand-made':''} · <span class="face-id" onclick="aiCopyId(${x.id})" title="Person id — the picker also takes it typed. Click to copy.">id ${x.id}</span></div>
           <div class="face-acts">
             <button class="dup-btn" onclick="aiSearchCluster(${x.id})">Show all</button>
             <button class="dup-btn" onclick="aiMergePrompt(${x.id})">Merge…</button>
-            <button class="dup-btn" onclick="aiHideCluster(${x.id})">Not a person</button>
+            <button class="dup-btn" onclick="aiHideCluster(${x.id})">${x.manual?'Delete':'Not a person'}</button>
           </div></div>`}).join('')+'</div>';
     aiAttachCrops(c);
 }
@@ -3566,7 +3730,7 @@ function aiAttachCrops(root){
 }
 async function aiDrawCrop(cv){
     const p=cv.dataset.p,i=+cv.dataset.i,v=cache.get(p),h=fReg.get(p);
-    if(!v||!h||!v.faces||!v.faces[i])return;
+    if(i<0||!v||!h||!v.faces||!v.faces[i])return;   // i<0 = hand-tagged, no detection box to crop
     try{
         const b=v.faces[i].box,bmp=await createImageBitmap(await h.getFile());
         const pad=Math.max(b[2],b[3])*0.35;
@@ -3589,6 +3753,36 @@ function aiCopyId(id){
         navigator.clipboard.writeText(String(id)).then(()=>showToast(`Copied person id ${id}.`,'success'),()=>{});
 }
 async function aiSaveMeta(){if(!aiMeta)return;aiMeta.clusters=(aiMeta.clusters||[]);await dPut(aiMeta)}
+// Manual ids come from a high range, never negative: "c>=0" and "c<0 is noise" checks are spread
+// across the file, and a negative id would be silently treated as an unclustered face everywhere.
+const MANUAL_ID0=1000000;
+async function aiNewPerson(name){
+    aiMeta=aiMeta||{p:'__ai__',v:AIV,clusters:[]};
+    const id=Math.max(aiMeta.nextM||MANUAL_ID0,MANUAL_ID0);
+    aiMeta.nextM=id+1;
+    aiMeta.clusters=(aiMeta.clusters||[]).concat([{id,name:(name||'').trim(),manual:true,hidden:false}]);
+    AIC.set(id,(name||'').trim());
+    await aiSaveMeta();
+    return id;
+}
+async function aiNewPersonPrompt(){
+    const n=prompt('Name the new person:');
+    if(n===null||!n.trim())return;
+    const id=await aiNewPerson(n);
+    if(vMode==='faces')rend();
+    showToast(`Created "${esc(n.trim())}" (id ${id}). Tag photos from the ☑ selection bar or the inspector.`,'success');
+}
+// Strips a person id out of every manual tag. Used when a hand-made person is deleted and when an
+// import replaces the cluster table underneath one.
+async function aiPurgePerson(id){
+    const upd=[];
+    for(const[p,v]of cache){if(!v)continue;let t=false;
+        if(v.pA&&v.pA.includes(id)){v.pA=v.pA.filter(c=>c!==id);if(!v.pA.length)delete v.pA;t=true}
+        if(v.pR&&v.pR.includes(id)){v.pR=v.pR.filter(c=>c!==id);if(!v.pR.length)delete v.pR;t=true}
+        if(t)upd.push(v)}
+    for(let i=0;i<upd.length;i+=500)await dPutMany(upd.slice(i,i+500));
+    return upd.length;
+}
 async function aiRenameCluster(id,name){
     if(!aiMeta)return;
     const c=(aiMeta.clusters||[]).find(x=>x.id===id);if(!c)return;
@@ -3603,9 +3797,12 @@ function showPeople(){
     if(!aiOK()){showToast('People need the local launcher — run node serve.mjs.','info');return}
     setView('faces');
 }
+// Queries by id, never by name. Nothing stops two people being called "Rob" - the rename box never
+// checked, and "+ New person" makes the collision easy - after which face:rob returns the union of
+// both and "Show all" is wrong on either card. The card still SHOWS the friendly name; only the
+// query is by id, and the user never types it.
 function aiSearchCluster(id){
-    const n=AIC.get(id);
-    const q='face:'+((n&&n.trim())?(/\s/.test(n)?'"'+n+'"':n):'person-'+id);
+    const q='face:person-'+id;
     const i=document.getElementById('sIn');if(!i)return;
     setView('list');i.value=q;i.classList.add('adv-on');setClearVis(true);scheduleSearch(q);
     showToast('Showing every photo of this person. 👥 in the toolbar goes back.','info');
@@ -3615,18 +3812,24 @@ function aiSearchCluster(id){
 async function aiMergePrompt(id){
     if(!aiMeta)return;
     const mem=aiClusterMembers();
-    const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden&&mem.has(x.id));
+    const others=(aiMeta.clusters||[]).filter(x=>x.id!==id&&!x.hidden&&(mem.has(x.id)||x.manual));
     if(!others.length){showToast('Nothing to merge into.','info');return}
-    const list=others.map(x=>`${x.id}: ${AIC.get(x.id)||'person-'+x.id} (${mem.get(x.id).length})`).join('\n');
     const me=AIC.get(id)||('person-'+id);
-    const ans=prompt(`Merge "${me}" (id ${id}) INTO which id?\n\nEvery face here moves to the person you pick, and this card goes away.\nThe id is also shown on each card.\n\n`+list);
-    if(ans===null)return;
-    const tgt=parseInt(ans,10);
+    // allowNew:false - merging into a person with no photos yet is a confusing no-op.
+    const r=await aiPickPerson({title:`Merge "${me}" into…`,confirmLabel:'Merge',exclude:[id],allowNew:false});
+    if(!r)return;
+    const tgt=r.id;
     if(!others.some(x=>x.id===tgt)){showToast('No such person id.','error');return}
-    const touched=[];
-    for(const[p,v]of cache){if(!v||!v.faces)continue;let hit=false;
-        v.faces.forEach(f=>{if(f.c===id){f.c=tgt;hit=true}});if(hit)touched.push(v)}
-    await dPutMany(touched);
+    const touched=new Set();
+    for(const[p,v]of cache){if(!v)continue;let hit=false;
+        (v.faces||[]).forEach(f=>{if(f.c===id){f.c=tgt;hit=true}});
+        // The manual layer points at the source id too, and merge has to carry it over or the hand
+        // work is orphaned the moment the source cluster is deleted below.
+        for(const k of['pA','pR'])if(v[k]&&v[k].includes(id)){
+            v[k]=[...new Set(v[k].map(c=>c===id?tgt:c))].sort((a,b)=>a-b);hit=true}
+        if(hit)touched.add(v)}
+    const arr=[...touched];
+    for(let i=0;i<arr.length;i+=500)await dPutMany(arr.slice(i,i+500));
     aiMeta.clusters=(aiMeta.clusters||[]).filter(x=>x.id!==id);
     AIC.delete(id);await aiSaveMeta();
     showToast('Merged into '+esc(AIC.get(tgt)||('person-'+tgt))+'.','success');
@@ -3635,8 +3838,96 @@ async function aiMergePrompt(id){
 async function aiHideCluster(id){
     if(!aiMeta)return;
     const c=(aiMeta.clusters||[]).find(x=>x.id===id);if(!c)return;
+    // A hand-made person has no detections to fall back on, so hiding it would leave its tags
+    // pointing at nothing. Delete it outright and strip the tags - but say what that costs first.
+    if(c.manual){
+        const n=(aiClusterMembers().get(id)||[]).length;
+        if(!confirm(`Delete "${AIC.get(id)||('person-'+id)}"?`+(n?`\n\nThe person tag is removed from ${n} photo${n===1?'':'s'}. The images themselves are untouched.`:'')))return;
+        aiMeta.clusters=(aiMeta.clusters||[]).filter(x=>x.id!==id);
+        AIC.delete(id);await aiPurgePerson(id);await aiSaveMeta();rend();
+        showToast('Person deleted.','info');return;
+    }
     c.hidden=true;AIC.delete(id);await aiSaveMeta();rend();
     showToast('Hidden from people.','info');
+}
+// ---- the shared person picker ----------------------------------------------------------------
+// One dialog, three consumers: the inspector, the bulk selection bar and Merge. Resolves to a
+// cluster id or null. The free-text id box stays because plenty of people are never given a name.
+let aiPickResolve=null;
+function aiPickPerson(opt){
+    opt=opt||{};
+    const ov=document.getElementById('personOverlay');if(!ov)return Promise.resolve(null);
+    const mem=aiClusterMembers(),ex=new Set(opt.exclude||[]);
+    // Every non-hidden person, INCLUDING ones with no photos left. Filtering on mem.has() here would
+    // mean that removing someone from the last image they appear in makes them impossible to add
+    // back - the People view can afford that filter, a picker cannot.
+    const all=((aiMeta&&aiMeta.clusters)||[]).filter(x=>!x.hidden&&!ex.has(x.id));
+    // Named first and alphabetical, because that is the list a user can actually scan; unnamed
+    // clusters keep their photo counts so "person-12 — 34 photos" is still recognisable.
+    const named=all.filter(x=>(AIC.get(x.id)||'').trim()).sort((a,b)=>AIC.get(a.id).localeCompare(AIC.get(b.id)));
+    const anon=all.filter(x=>!(AIC.get(x.id)||'').trim()).sort((a,b)=>((mem.get(b.id)||[]).length)-((mem.get(a.id)||[]).length));
+    const cnt=id=>{const n=(mem.get(id)||[]).length;return `${n} photo${n===1?'':'s'}`};
+    const opts=named.map(x=>`<option value="${x.id}">${esc(AIC.get(x.id))}${x.manual?' ✎':''} — ${cnt(x.id)}</option>`)
+        .concat(anon.length?['<option disabled>── unnamed ──</option>']:[])
+        .concat(anon.map(x=>`<option value="${x.id}">person-${x.id} — ${cnt(x.id)}</option>`)).join('');
+    document.getElementById('personTitle').textContent=opt.title||'Choose a person';
+    document.getElementById('personSel').innerHTML=opts||'<option value="">No people yet</option>';
+    document.getElementById('personId').value='';
+    document.getElementById('personErr').textContent='';
+    document.getElementById('personNew').style.display=opt.allowNew===false?'none':'';
+    document.getElementById('personActs').style.display=opt.actions?'':'none';
+    // Reset to Add every time. A radio left on "Remove" from a previous open is a destructive
+    // default the user did not choose and would not look for.
+    const add=document.querySelector('input[name="personAct"][value="add"]');if(add)add.checked=true;
+    document.getElementById('personGo').textContent=opt.confirmLabel||'Apply';
+    ov.classList.remove('hidden');
+    setTimeout(()=>{const s=document.getElementById('personSel');if(s)s.focus()},0);
+    return new Promise(r=>{aiPickResolve=r});
+}
+function aiPickClose(v){
+    const ov=document.getElementById('personOverlay');if(ov)ov.classList.add('hidden');
+    const r=aiPickResolve;aiPickResolve=null;if(r)r(v);
+}
+// The typed id wins when present - it is the escape hatch for a cluster the dropdown does not list.
+function aiPickGo(){
+    const raw=document.getElementById('personId').value.trim();
+    let id;
+    if(raw){
+        id=parseInt(raw.replace(/^person-/i,''),10);
+        const known=((aiMeta&&aiMeta.clusters)||[]).some(x=>x.id===id);
+        // Inline, not showToast - the dialog is modal and a toast behind it is easy to miss.
+        if(isNaN(id)||!known){document.getElementById('personErr').textContent='No person with that id.';return}
+    }else{
+        id=parseInt(document.getElementById('personSel').value,10);
+        if(isNaN(id)){document.getElementById('personErr').textContent='Pick a person, or type an id.';return}
+    }
+    const act=document.querySelector('input[name="personAct"]:checked');
+    aiPickClose({id,act:act?act.value:'add'});
+}
+// Bulk edit over selectedItems. Deliberately does NOT call rend() - rend() calls clearURLs(), which
+// revokes the thumbnail object URLs and blanks every image. Same rule as syncSelUI/syncDupGroupUI.
+async function aiBulkPeople(){
+    if(!aiOK()){showToast('People need the local launcher — run node serve.mjs.','info');return}
+    if(!selectedItems.size)return;
+    const r=await aiPickPerson({title:`Edit people on ${selectedItems.size} image${selectedItems.size===1?'':'s'}`,actions:true,confirmLabel:'Apply'});
+    if(!r)return;
+    const upd=[];
+    for(const p of selectedItems){const v=cacheRecordFor(p);if(!v)continue;
+        if(applyPersonEdit(v,r.id,r.act))upd.push(v)}
+    for(let i=0;i<upd.length;i+=500)await dPutMany(upd.slice(i,i+500));
+    const nm=esc(AIC.get(r.id)||('person-'+r.id));
+    // The count is of actual writes, not the selection size: an image that already had the person
+    // is not a change, and claiming otherwise is how "tagged 12" quietly becomes 9.
+    if(!upd.length){showToast(`No change — all ${selectedItems.size} already match.`,'info');return}
+    showToast(`${r.act==='rm'?'Removed':r.act==='set'?'Set':'Tagged'} ${nm} on ${upd.length} image${upd.length===1?'':'s'}.`,'success');
+    if(cItem&&selectedItems.has(cItem.p))popPeople(cache.get(cItem.p));
+}
+async function aiPickNew(){
+    const n=prompt('Name the new person:');
+    if(n===null||!n.trim())return;
+    const id=await aiNewPerson(n);
+    const act=document.querySelector('input[name="personAct"]:checked');
+    aiPickClose({id,act:act?act.value:'add'});
 }
 // --- /AI:FACES ---
 
