@@ -124,6 +124,21 @@ body.mode-detail .inspector{position:relative;transform:none;border-left:1px sol
 body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mode-list .detail-layer{display:none}
 .stats-view{padding:0}.stat-card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;margin-bottom:20px}.stat-card h3{color:var(--acc);margin:0 0 15px 0;font-size:1.1rem;border-bottom:1px solid var(--bd);padding-bottom:10px}.stat-item{margin:8px 0;color:var(--txt);font-size:0.9rem;display:flex;justify-content:space-between}.stat-item strong{color:var(--acc)}
 .card.favorite{border-color:#fbbf24}.card.selected{border-color:var(--acc)!important;border-width:2px;box-shadow:0 0 15px var(--acc)}.card.selected::before{content:'';position:absolute;inset:0;background:var(--sel-bg);pointer-events:none;z-index:5}.list-row.selected{background:var(--sel-bg)!important}.favorite-star{position:absolute;top:8px;right:8px;font-size:1.2rem;cursor:pointer;background:rgba(0,0,0,0.5);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0.7;z-index:10}.favorite-star:hover{opacity:1}.card:hover .favorite-star{opacity:1}
+/* SELECTION MODE. The checkboxes are always in the DOM and revealed by CSS, so toggling the mode
+   never has to re-render (and so never re-decodes a page of thumbnails). The bar lives outside
+   .grid-scroll on purpose - inside it, it would fight the sticky .list-head. */
+.sel-bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 20px;border-bottom:1px solid var(--bd);background:var(--side);font-size:0.85rem}
+/* :not(.mode-detail) rather than a separate hide rule - a hide rule would lose on specificity. */
+body.sel-mode.sel-able:not(.mode-detail) .sel-bar{display:flex}
+.sel-count{font-weight:700;color:var(--txt)}.sel-hint{color:var(--mut);font-size:0.78rem}
+.sel-bar .spacer{margin-left:auto}
+.sel-cb{display:none;width:17px;height:17px;accent-color:var(--acc);cursor:pointer;flex:0 0 auto;margin:0}
+body.sel-mode .sel-cb{display:block}
+.card .sel-cb{position:absolute;top:8px;left:8px;z-index:12}
+/* Overlaid, not laid out inline: .list-row's first track is fixed at calc(--thumb-size/2.5 + 18px)
+   to stay aligned with .list-head, so an inline checkbox would push the thumbnail out of it. */
+.list-cell1{position:relative;display:flex;align-items:center;min-width:0;height:100%}
+.list-cell1 .sel-cb{position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:12;box-shadow:0 0 0 2px var(--card)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:10000;display:flex;align-items:center;gap:12px;min-width:250px;animation:toastSlide 0.3s ease}.toast.success{border-left:4px solid #4ade80}.toast.error{border-left:4px solid #ef4444}.toast.info{border-left:4px solid var(--acc)}@keyframes toastSlide{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .context-menu{position:fixed;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:4px 0;min-width:150px;z-index:10000;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none}.context-menu-item{padding:8px 16px;cursor:pointer;color:var(--txt);font-size:0.85rem}.context-menu-item:hover{background:var(--side)}.context-menu-item.disabled{opacity:0.5;cursor:not-allowed}
 /* DUPLICATES VIEW */
@@ -269,6 +284,7 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
     <div style="width:1px;height:24px;background:var(--bd)"></div>
     <button id="bStats" class="btn-icon" onclick="toggleStats()" title="Metadata Statistics">📊</button>
     <button id="viewToggle" class="btn-icon" onclick="toggleView()" title="Toggle Grid/List">🔲</button>
+    <button id="selModeBtn" class="btn-icon" onclick="toggleSelectMode()" title="Selection mode — click items to select without holding a key">☑</button>
     <button id="thumbToggle" class="thumb-btn" onclick="toggleThumbnails()" title="Toggle Thumbnails">Thumbnails <span id="thumbIndicator" class="thumb-dot" style="color: #4ade80;">●</span></button>
     <button id="themeToggle" class="btn-icon" onclick="toggleTheme()" title="Toggle Theme">🌙</button>
     <button id="helpBtn" class="btn-icon" onclick="showHelp()" title="Help & Shortcuts">❓</button>
@@ -309,6 +325,15 @@ body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mo
             <span id="fCount" style="color:var(--mut)">0 items</span>
         </div>
     </div>
+        <div id="selBar" class="sel-bar">
+            <span id="selCount" class="sel-count">Nothing selected</span>
+            <span class="sel-hint">Click to select · double-click to open</span>
+            <span class="spacer"></span>
+            <button class="dup-btn" onclick="selectAllListed()">Select all</button>
+            <button class="dup-btn" onclick="clearSelection()">Clear</button>
+            <button id="selDelBtn" class="dup-btn danger" onclick="deleteSelection()" disabled>Delete 0</button>
+            <button class="dup-btn" onclick="toggleSelectMode(false)">Done</button>
+        </div>
         <div class="grid-scroll"><div id="grid" class="grid"></div></div>
         <div id="detailView" class="detail-layer">
             <button class="back-pill" onclick="exitDetail()">← Back (Esc)</button>
@@ -1535,7 +1560,7 @@ async function contextDelete(){
         showToast('Deleted successfully','success')
     }catch(e){showToast('Delete failed: '+e.message,'error')}
 }
-function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete selected item</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
+function showHelp(){document.getElementById('helpContent').innerHTML="<div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;\"><div><h3 style=\"color:var(--acc);margin-top:0;\">⌨️ Keyboard Shortcuts</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><kbd>Arrow Keys</kbd> Navigate in detail view</div><div><kbd>Enter</kbd> Open selected image</div><div><kbd>Delete</kbd> Delete the selection, or the open image</div><div><kbd>Esc</kbd> Close overlays / Exit detail</div><div><kbd>3</kbd> Statistics view</div><div><kbd>S</kbd> Statistics view</div><div><kbd>D</kbd> Find duplicates</div><div><kbd>[ / ]</kbd> Previous / next page</div><div><kbd>T</kbd> Toggle theme</div><div><kbd>?</kbd> Show this help</div><div><kbd>F</kbd> Focus search</div><div><kbd>R</kbd> Refresh folder</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🖱️ Mouse Actions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Click</strong> Image to view details</div><div><strong>Right-click</strong> File/Folder for context menu</div><div><strong>Drag & Drop</strong> Files to move between folders</div><div><strong>Click Star</strong> ⭐ to favorite/unfavorite</div><div><strong>Ctrl+Click</strong> Add / remove from selection</div><div><strong>Shift+Click</strong> Range select</div><div><strong>☑ Selection mode</strong> Click to select, no key held</div><div><strong>Double-click</strong> Open an image in selection mode</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">📋 Functions</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div><strong>Open Folder</strong> Select folder to browse</div><div><strong>↻ Refresh</strong> Rescan folder for new files</div><div><strong>Search</strong> Filter by name, prompt and metadata</div><div><strong>⚙ Advanced Search</strong> AND / OR / exclude builder</div><div><strong>Model filter</strong> Toolbar dropdown, narrows to one checkpoint</div><div><strong>Sort</strong> Toolbar dropdown, or click any list column</div><div><strong>Statistics</strong> View metadata analytics</div><div><strong>Theme Toggle</strong> Switch dark/light mode</div><div><strong>Favorites</strong> Star images for quick access</div><div><strong>Delete</strong> Remove files/folders (right-click)</div><div><strong>🔍 Duplicates</strong> Find identical images by content</div><div><strong>Formats</strong> png, jpg, jpeg, webp, gif, mp4, webm, mov, mkv</div></div></div><div><h3 style=\"color:var(--acc);margin-top:0;\">🎯 Tips</h3><div style=\"display:grid;gap:8px;font-size:0.9rem;\"><div>• Use drag-and-drop to organize files</div><div>• Right-click folders for a context menu</div><div>• Statistics view shows metadata insights</div><div>• Favorites persist across sessions</div><div>• Theme preference is saved automatically</div><div>• Large folders are paged — lower \"items per page\" if scrolling feels heavy</div><div>• Thumbnails load only as they scroll into view</div><div>• Duplicates match on file content, so renames and copies in other subfolders are still caught</div><div>• In the duplicates view, pick a \"Keep\" copy per group, then delete the rest</div></div></div></div><h3 style=\"color:var(--acc);margin:24px 0 12px;\">🔎 Search Syntax</h3><div style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;font-size:0.9rem;\"><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man fish</code> — both words — bare words are ANDed</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man OR fish</code> — either word</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">man AND fish -river</code> — both words, excluding \"river\"</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">(man OR woman) AND fish</code> — parentheses group</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">\"on a boat\"</code> — exact phrase</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">NOT blurry</code> — same as -blurry</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">model:flux</code> — restrict a term to one field</div><div><code style=\"background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;color:var(--chip-txt)\">prompt:\"red hair\" -lora:detail</code> — fields work with phrases and exclusion too</div></div><div style=\"margin-top:12px;font-size:0.85rem;color:var(--mut);line-height:1.6\">Fields: <code>name</code> <code>path</code> <code>prompt</code> <code>neg</code> <code>model</code> <code>sampler</code> <code>seed</code> <code>steps</code> <code>cfg</code> <code>size</code> <code>lora</code> <code>face</code>.<br>With AI indexing on: <code>sem:\"a giraffe on a beach\"</code> ranks by meaning, <code>like:\"folder1/x.png\"</code> finds visually similar images, and <code>face:rob</code> matches a named person. These combine with everything above.<br>The ⚙ button in the search box opens a builder that writes this syntax for you.</div>";document.getElementById('helpOverlay').classList.remove('hidden')}
 function hideHelp(){document.getElementById('helpOverlay').classList.add('hidden')}
 function showToast(message,type='info'){const toast=document.createElement('div');toast.className=`toast ${type}`;const closeBtn=document.createElement('button');closeBtn.textContent='✕';closeBtn.style.cssText='background:none;border:none;color:var(--txt);cursor:pointer;font-size:1.2rem;';closeBtn.onclick=()=>toast.remove();toast.innerHTML=`<div style="flex:1;">${message}</div>`;toast.appendChild(closeBtn);document.body.appendChild(toast);setTimeout(()=>{toast.style.animation='toastSlide 0.3s ease reverse';setTimeout(()=>toast.remove(),300)},3000)}
 function rTree(){const c=document.getElementById('tree');c.innerHTML='';const a=document.createElement('div');a.className='folder active';a.innerText='📁 All Files';a.ondragover=e=>{e.preventDefault();a.classList.add('drag-over')};a.ondragleave=()=>a.classList.remove('drag-over');a.ondrop=e=>{e.preventDefault();a.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),"")};a.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));a.classList.add('active');opD(null,"")};a.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,a,"")};c.appendChild(a);[...dReg.keys()].sort().forEach(p=>{if(!p)return;const d=document.createElement('div');d.className='folder';d.innerText="📁 "+p.split('/').pop();d.style.paddingLeft=(p.split('/').length*16)+'px';d.ondragover=e=>{e.preventDefault();d.classList.add('drag-over')};d.ondragleave=()=>d.classList.remove('drag-over');d.ondrop=e=>{e.preventDefault();d.classList.remove('drag-over');moveFile(e.dataTransfer.getData("text"),p)};d.onclick=()=>{document.querySelectorAll('.folder').forEach(e=>e.classList.remove('active'));d.classList.add('active');opD(dReg.get(p),p)};d.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,d,p)};c.appendChild(d)})}
@@ -1543,7 +1568,7 @@ async function opD(h,p){
     // opD never assigns .s, so a relevance sort left over from a semantic query would sort every
     // row by zero - i.e. arbitrary order. Drop back to whatever was in effect before the query.
     if(sortBy==='relevance'){sortBy=prevSort||'date';prevSort=null;syncSortUI()}
-    cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;if(!passModel(fp))continue;cFiles.push(fileInfo)}}await applySort();rend()}
+    cDir=h;currP=p;const pathText=p||"All Files";const displayText=showFavoritesOnly?`${pathText} (Favorites Only)`:pathText;document.getElementById('pathDisplay').innerText=displayText;cFiles=[];curPage=0;selectedIndex=-1;for(const [fp,fh] of fReg.entries()){const par=fp.includes('/')?fp.substring(0,fp.lastIndexOf('/')):"";if(!h||par===p){const item=cache.get(fp)||{};const fileInfo={p:fp,h:fh,d:item.d||0,n:item.n||fh.name};if(showFavoritesOnly&&!favorites.has(fp))continue;if(!passModel(fp))continue;cFiles.push(fileInfo)}}pruneSelection();await applySort();rend()}
 async function applySort(){
     if(sortBy==='relevance'){cFiles.sort((a,b)=>sortDirection==='asc'?(a.s||0)-(b.s||0):(b.s||0)-(a.s||0));return}
     if(sortBy==='name'){
@@ -1705,11 +1730,86 @@ async function loadTileMedia(host){
 }
 // =================== END PAGINATION + LAZY MEDIA ===================
 
+// ===================== SELECTION MODE =====================
+// Ctrl / Shift click still work exactly as before. Selection mode only changes what a PLAIN click
+// does - it picks instead of opening - so the whole feature is reachable without the keyboard.
+let selectMode=false;
+// The path is read back off the host's data-lazy rather than interpolated in, so filenames with
+// quotes in them can't break the attribute.
+const selCheckbox=p=>`<input type="checkbox" class="sel-cb"${selectedItems.has(p)?' checked':''} tabindex="-1" aria-label="Select item" onclick="event.stopPropagation();selToggleFrom(this)" ondblclick="event.stopPropagation()">`;
+function selToggleFrom(cb){
+    const host=cb.closest('[data-lazy]');if(!host)return;
+    const p=host.dataset.lazy;
+    selectedItems.has(p)?selectedItems.delete(p):selectedItems.add(p);
+    const idx=cFiles.findIndex(f=>f.p===p);if(idx>=0)selectedIndex=idx;
+    syncSelUI();
+}
+function toggleSelectMode(on){
+    selectMode=(on===undefined)?!selectMode:!!on;
+    document.body.classList.toggle('sel-mode',selectMode);
+    const b=document.getElementById('selModeBtn');if(b)b.classList.toggle('active',selectMode);
+    if(!selectMode)selectedItems.clear();
+    syncSelUI();
+}
+// Never rend() for a selection change - rend() calls clearURLs(), which revokes the thumbnail
+// object URLs and blanks the images. Same rule the duplicates view follows.
+function syncSelUI(){
+    document.querySelectorAll('#grid [data-lazy]').forEach(el=>{
+        const on=selectedItems.has(el.dataset.lazy);
+        el.classList.toggle('selected',on);
+        const cb=el.querySelector('.sel-cb');if(cb)cb.checked=on;
+    });
+    const n=selectedItems.size;
+    const cnt=document.getElementById('selCount');
+    if(cnt)cnt.textContent=n?`${n} selected`:'Nothing selected';
+    const db=document.getElementById('selDelBtn');
+    if(db){db.disabled=!n;db.textContent=`Delete ${n}`}
+}
+function clearSelection(){selectedItems.clear();selectedIndex=-1;syncSelUI()}
+function selectAllListed(){cFiles.forEach(f=>selectedItems.add(f.p));syncSelUI()}
+// cFiles was rebuilt, so a selection made in another folder or under a different query would still
+// be counted by the bar and deleted by it - while being invisible to the user.
+function pruneSelection(){
+    if(!selectedItems.size)return;
+    const live=new Set(cFiles.map(f=>f.p));
+    for(const p of[...selectedItems])if(!live.has(p))selectedItems.delete(p);
+}
+function tileClick(e,f,i){
+    if(e.ctrlKey||e.metaKey){
+        selectedItems.has(f.p)?selectedItems.delete(f.p):selectedItems.add(f.p);
+        selectedIndex=i;syncSelUI();return
+    }
+    if(e.shiftKey){
+        if(selectedIndex<0)selectedIndex=i;   // establish the anchor if there isn't one
+        const start=Math.min(selectedIndex,i),end=Math.max(selectedIndex,i);
+        selectedItems.clear();
+        for(let k=start;k<=end;k++)selectedItems.add(cFiles[k].p);
+        syncSelUI();return
+    }
+    selectedIndex=i;
+    if(selectMode){
+        selectedItems.has(f.p)?selectedItems.delete(f.p):selectedItems.add(f.p);
+        syncSelUI();return
+    }
+    const wasMulti=selectedItems.has(f.p)&&selectedItems.size>1;
+    selectedItems.clear();selectedItems.add(f.p);syncSelUI();
+    if(!wasMulti)enterDet(i);   // collapsing a multi-selection to one item shouldn't also open it
+}
+// In selection mode a plain click no longer opens the viewer, so double-click has to.
+function tileDblClick(e,i){
+    if(!selectMode||e.ctrlKey||e.metaKey||e.shiftKey)return;
+    e.preventDefault();enterDet(i);
+}
+// =================== END SELECTION MODE ===================
+
 function rend(){
     clearURLs();
     const c=document.getElementById('grid');c.innerHTML='';c.className=vMode==='stats'?'stats-view':(vMode==='dups'?'dup-view':(vMode==='faces'?'faces-view':(vMode==='grid'?'grid':'list-view')));document.getElementById('fCount').innerText=`${cFiles.length} items`;
     if(mediaIO){mediaIO.disconnect();mediaIO=null}
     clampPage();renderPager();
+    // Selection only means anything in the two file listings, so the bar hides for the others.
+    document.body.classList.toggle('sel-able',vMode==='grid'||vMode==='list');
+    syncSelUI();
     if(vMode==='stats'){renderStats(c);return}
     if(vMode==='dups'){renderDuplicates(c);return}
     if(vMode==='faces'){renderFaces(c);return}
@@ -1731,26 +1831,9 @@ function rend(){
             div.ondragstart=e=>{e.dataTransfer.setData("text", getDragData(f.p));e.dataTransfer.effectAllowed="move"};
             const isFavorite=favorites.has(f.p);const tag=cache.get(f.p)?.v?'video':'img';
             div.dataset.lazy=f.p;
-            div.innerHTML=`<${tag} src=""></${tag}>${isFavorite?'<div class="favorite-star" style="opacity:1">⭐</div>':''}`;
-            div.onclick=(e)=>{
-                if(e.ctrlKey) {
-                    selectedItems.has(f.p) ? selectedItems.delete(f.p) : selectedItems.add(f.p); 
-                    selectedIndex = i; rend();
-                } else if(e.shiftKey) {
-                    if(selectedIndex < 0) selectedIndex = i; // Establish first anchor if missing
-                    const start=Math.min(selectedIndex,i); const end=Math.max(selectedIndex,i);
-                    selectedItems.clear();
-                    for(let k=start; k<=end; k++) selectedItems.add(cFiles[k].p);
-                    rend();
-                } else {
-                    selectedIndex=i;
-                    if(selectedItems.has(f.p) && selectedItems.size > 1) {
-                        selectedItems.clear(); selectedItems.add(f.p); rend();
-                    } else {
-                        selectedItems.clear(); selectedItems.add(f.p); enterDet(i);
-                    }
-                }
-            };
+            div.innerHTML=`${selCheckbox(f.p)}<${tag} src=""></${tag}>${isFavorite?'<div class="favorite-star" style="opacity:1">⭐</div>':''}`;
+            div.onclick=e=>tileClick(e,f,i);
+            div.ondblclick=e=>tileDblClick(e,i);
             div.oncontextmenu=e=>{e.preventDefault();showContextMenu(e,div,f.p,true)};
             c.appendChild(div)
         });
@@ -1780,28 +1863,14 @@ function rend(){
         dateCreated = firstSeen ? formatDate(firstSeen) : "Loading...";
         
         div.className=`list-row${isSelected?' selected':''}`;
-        if(isSelected) div.style.backgroundColor='rgba(139,92,246,0.2)';
         const tag=mt.v?'video':'img';
         div.dataset.lazy=f.p;if(f.d)div.dataset.d=f.d;   // loadTileMedia() also refreshes .date-modified
-        div.innerHTML=`<${tag} class="list-img"></${tag}><div>${f.h.name}</div><div>${mm.model||""}</div><div class="date-created">${dateCreated}</div><div class="date-modified">${dateModified}</div>`;
-        div.onclick=(e)=>{
-            if(e.ctrlKey){
-                selectedItems.has(f.p)?selectedItems.delete(f.p):selectedItems.add(f.p);
-                selectedIndex = i; rend();
-            }else if(e.shiftKey){
-                if(selectedIndex < 0) selectedIndex = i; // Establish first anchor if missing
-                const start=Math.min(selectedIndex,i);const end=Math.max(selectedIndex,i);
-                selectedItems.clear();
-                for(let k=start;k<=end;k++)selectedItems.add(cFiles[k].p);rend()
-            }else{
-                selectedIndex=i;
-                if(selectedItems.has(f.p) && selectedItems.size > 1) {
-                    selectedItems.clear(); selectedItems.add(f.p); rend();
-                } else {
-                    selectedItems.clear(); selectedItems.add(f.p); enterDet(i);
-                }
-            }
-        };div.oncontextmenu=(e)=>{e.preventDefault();showContextMenu(e,div,f.p,true)};c.appendChild(div)
+        // The checkbox rides inside the first grid cell: .list-row's grid-template-columns has to
+        // keep matching .list-head, so an extra top-level child is not an option.
+        div.innerHTML=`<div class="list-cell1">${selCheckbox(f.p)}<${tag} class="list-img"></${tag}></div><div>${f.h.name}</div><div>${mm.model||""}</div><div class="date-created">${dateCreated}</div><div class="date-modified">${dateModified}</div>`;
+        div.onclick=e=>tileClick(e,f,i);
+        div.ondblclick=e=>tileDblClick(e,i);
+        div.oncontextmenu=(e)=>{e.preventDefault();showContextMenu(e,div,f.p,true)};c.appendChild(div)
     });
     observeMedia(c);
 }
@@ -1963,7 +2032,8 @@ document.addEventListener('keydown',e=>{
     if(document.body.classList.contains('mode-detail')){if(e.key==='ArrowRight')nav(1);if(e.key==='ArrowLeft')nav(-1);if(e.key==='Escape')exitDetail();if(e.key==='Delete'){e.preventDefault();deleteFromDetail()}return}
     if(e.key==='?'||(e.shiftKey&&e.key==='?')){e.preventDefault();showHelp();return}
     if(e.key==='Escape'){
-        if(selectedItems.size > 0){ selectedItems.clear(); selectedIndex = -1; rend(); return; }
+        if(selectedItems.size>0){clearSelection();return}
+        if(selectMode){toggleSelectMode(false);return}
         hideHelp(); return;
     }
     if(e.key==='Enter'&&selectedIndex>=0&&selectedIndex<cFiles.length){enterDet(selectedIndex);return}
@@ -2379,7 +2449,7 @@ async function runSearch(q){
     if(scored){if(sortBy!=='relevance'){prevSort=sortBy;sortBy='relevance';sortDirection='desc'}}
     else if(sortBy==='relevance'){sortBy=prevSort||'date';prevSort=null}
     syncSortUI();
-    cFiles=a;curPage=0;selectedIndex=-1;
+    cFiles=a;curPage=0;selectedIndex=-1;pruneSelection();
     await applySort();if(seq!==searchSeq)return;
     rend();
 }
