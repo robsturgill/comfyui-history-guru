@@ -644,7 +644,9 @@ const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectSt
 
 // FS
 async function initFileSystem(){try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
-async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);aiInvalidateMat();await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
+// jtWarned is latched on a COUNT, so a different library with the same number of unindexed files
+// would inherit the suppression and never warn.
+async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);aiInvalidateMat();jtWarned=null;await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
 // NOTE: opD's filter is `!h || parentOf(file)===p`. Passing rH restricts the list to loose files
 // sitting directly in the root, so a library kept in subfolders renders empty. null = "All Files",
 // matching what the sidebar's All Files entry (which rTree marks active) already does.
