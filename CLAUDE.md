@@ -99,12 +99,20 @@ Everything hangs off a handful of module-level globals. Know these before changi
 | `dReg` | `Map<relPath, DirHandle>` — `''` maps to the root |
 | `cache` | `Map<relPath, item>` — parsed metadata, mirrored to IndexedDB (`DB = "GuruV610"`, store `"i"`, keyPath `p`) |
 | `cFiles` | The files currently listed in the main view (one folder, or search results) |
-| `vMode` | `'list'` \| `'grid'` \| `'stats'` \| `'dups'` — drives `rend()` |
+| `vMode` | `'list'` \| `'grid'` \| `'stats'` \| `'dups'` \| `'faces'` — drives `rend()` |
+| `libView` | The last **library** view (`list`/`grid`) the user chose, persisted as `guru-view` |
 | `objURLs` | Live object URLs; `clearURLs()` revokes them once the set exceeds 100 |
 
-A `cache` item is `{p, n, d, firstSeen, m, v, dim}` — path, name, lastModified, first-seen date,
-parsed metadata, isVideo, and true pixel dimensions. The duplicate scanner adds `sha`, `shaSize`,
-`shaMtime`.
+A `cache` item is `{p, n, d, firstSeen, m, v, dim, jt, jv}` — path, name, lastModified, first-seen
+date, parsed metadata, isVideo, true pixel dimensions, and the `json:` search blob with its `JSONV`
+stamp. The duplicate scanner adds `sha`, `shaSize`, `shaMtime`.
+
+`stats`, `dups` and `faces` are **excursions**; `libView` is where every way back out of them lands.
+`setView()` only reassigns `libView` for `list`/`grid`, so it survives the round trip — but that
+means **nothing may hardcode `setView('list')` to return to the library**. `aiSearchCluster()`
+("Show all") did, and it dumped a grid user into list on every trip through the people view. Use
+`setView(libView)`. Note the init at the `guru-thumbnails` check forces `vMode=libView='list'` when
+thumbnails are off, so verifying this with thumbnails off gives a false negative.
 
 ### JSON / workflow viewer
 
@@ -396,6 +404,39 @@ match across a field boundary. Unknown `field:` names fall back to `f.all`.
 `runSearch()` replaces `cFiles` wholesale and is the only search entry point; the input handler
 debounces into it (160ms). The advanced panel (`advCompose`) is a *front-end for the syntax*, not a
 second engine — it composes a query string, writes it into `#sIn`, and calls the same path.
+
+### `json:` and the JSON search index
+
+Grep `// ===================== JSON SEARCH INDEX`. `m` is only a *summary* — prompt, model, sampler,
+a few numbers. Node class types, user-typed node titles, upscale model names and custom-node widget
+values are unreachable by every other field. `jt` on the cache item is the embedded metadata itself,
+minified and lowercased; `json:` (aliases `raw` `meta` `metadata` `workflow` `node`) searches it.
+
+- **Order is preserved and nothing is deduped.** A deduped token bag is far smaller, but joining
+  unrelated fragments manufactures adjacencies that aren't in the file, so `json:"ckpt_name":"flux"`
+  would report matches that don't exist. A search named "search the JSON" must not invent substrings.
+- **`json` is deliberately kept out of `f.all`.** Every ComfyUI image contains `ksampler`, `cfg`,
+  `seed`, `model` and its own node ids — folding it in makes bare-word search match most of the
+  library. Reachable only through an explicit `json:` term. This is the load-bearing decision.
+- `jtStrip()` drops UI-graph geometry. `pos`/`size`/`bounding` are dropped **by shape, not by name** —
+  only when array-valued — because a custom node's `inputs.size = 1024` is a real search target.
+  `widgets_values` and `title` are never dropped; they are the point of the feature.
+- `jsonBlob()` takes **chunks, not a buffer**, and `fileChunks()` branches videos through
+  `readVideoMeta` exactly as `viewJSON()` does. A buffer-taking extractor would pull whole videos
+  into memory — see [Video metadata](#video-metadata).
+- `proc()` writes `jt` for free (the text is already in hand). Only entries cached by an earlier
+  build need `buildJsonIndex()`, which is **a button, not something `runSearch` triggers** — the
+  160ms debounce would otherwise start a full-library re-read at `json:f`. Same precedent as the
+  duplicate scan and AI analysis.
+- Bump `JSONV` when `jtStrip`/`jsonBlob` changes; `jtNeeds()` then re-indexes without a DB bump.
+- **An unindexed item makes `f.json` defined-but-empty**, so `advEval` correctly refuses to fall
+  through to `f.all` — and correctly returns false for everything. That renders as an honest-looking
+  empty list. `runSearch` counts those items and toasts, latched on the *count* (`jtWarned`), not on
+  the query text, or every prefix the debounce lets through re-fires it.
+
+`#load`'s backdrop is a hardcoded near-black in **both** themes, so `#load` and `.load-msg` use
+color literals. `--txt`/`--mut` are dark grays in light mode and vanish into it — this is the one
+place the "every color from a var" rule is wrong.
 
 ### Filters
 

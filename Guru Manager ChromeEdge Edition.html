@@ -126,6 +126,10 @@ body.mode-detail .inspector{position:relative;transform:none;border-left:1px sol
     .btn-dang:hover{background:var(--ai-bad);color:#fff}
 .overlay{position:fixed;inset:0;background:rgba(9,9,11,0.95);z-index:5000;display:flex;flex-direction:column;align-items:center;justify-content:center}.hidden{display:none}
 .spin{width:40px;height:40px;border:4px solid #333;border-top-color:var(--acc);border-radius:50%;animation:s 1s linear infinite;margin-bottom:20px}@keyframes s{to{transform:rotate(360deg)}}
+/* #load's backdrop is a hardcoded near-black in BOTH themes, so its text can't come from --txt /
+   --mut - in light mode those are dark grays and vanish into it. Literals here are deliberate. */
+#load{color:#e4e4e7}
+.load-msg{margin-top:10px;font-size:13px;color:#a1a1aa;text-align:center;max-width:70vw}.load-msg:empty{display:none}
 body.mode-detail .folder-sidebar,body.mode-detail .toolbar{display:none} body.mode-list .detail-layer{display:none}
 .stats-view{padding:0}.stat-card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;margin-bottom:20px}.stat-card h3{color:var(--acc);margin:0 0 15px 0;font-size:1.1rem;border-bottom:1px solid var(--bd);padding-bottom:10px}.stat-item{margin:8px 0;color:var(--txt);font-size:0.9rem;display:flex;justify-content:space-between}.stat-item strong{color:var(--acc)}
 .card.favorite{border-color:#fbbf24}.card.selected{border-color:var(--acc)!important;border-width:2px;box-shadow:0 0 15px var(--acc)}.card.selected::before{content:'';position:absolute;inset:0;background:var(--sel-bg);pointer-events:none;z-index:5}.list-row.selected{background:var(--sel-bg)!important}.favorite-star{position:absolute;top:8px;right:8px;font-size:1.2rem;cursor:pointer;background:rgba(0,0,0,0.5);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;transition:opacity 0.2s;opacity:0.7;z-index:10}.favorite-star:hover{opacity:1}.card:hover .favorite-star{opacity:1}
@@ -321,6 +325,7 @@ body.sel-mode .sel-cb{display:block}
             <div class="adv-row"><label>Search in</label>
                 <select id="advField" onchange="advCompose()">
                     <option value="">Everything</option>
+                    <option value="json">JSON / raw metadata</option>
                     <option value="prompt">Positive prompt</option>
                     <option value="neg">Negative prompt</option>
                     <option value="name">Filename</option>
@@ -331,9 +336,12 @@ body.sel-mode .sel-cb{display:block}
             <div class="adv-row"><label>Query</label><div id="advPreview" class="adv-preview"></div></div>
             <div class="adv-hint">Type directly in the search box too. <code>AND</code> <code>OR</code> <code>NOT</code>, <code>-word</code> to exclude,
                 <code>"exact phrase"</code>, <code>( )</code> to group, and <code>field:value</code> — e.g.
-                <code>(man OR woman) AND fish -river model:flux</code>. Bare words are ANDed.</div>
+                <code>(man OR woman) AND fish -river model:flux</code>. Bare words are ANDed.
+                <br><code>json:</code> searches the raw embedded workflow — node types, titles and widget
+                values the other fields never see. Needs the index below.</div>
             <div class="adv-foot">
                 <span id="advErr" class="adv-err"></span><span class="spacer"></span>
+                <button class="dup-btn" onclick="buildJsonIndex()" title="Re-read each file and index its embedded metadata for json: searches">Build JSON index</button>
                 <button class="dup-btn" onclick="advReset()">Clear</button>
                 <button class="dup-btn" onclick="toggleAdvSearch()">Done</button>
             </div>
@@ -446,7 +454,7 @@ body.sel-mode .sel-cb{display:block}
         </div>
     </aside>
 </div>
-<div id="load" class="overlay hidden"><div class="spin"></div><h3>Processing...</h3></div>
+<div id="load" class="overlay hidden"><div class="spin"></div><h3>Processing...</h3><div id="loadMsg" class="load-msg"></div></div>
 <div id="wel" class="overlay"><h2>History Guru ChromeEdge Edition</h2><p style="color:var(--mut);margin-bottom:20px">Hello Creator</p><button class="btn" onclick="initFileSystem()">Open Folder</button></div>
 <div id="contextMenu" class="context-menu">
     <div class="context-menu-item" onclick="contextDelete()" style="color:#ef4444">Delete</div>
@@ -1258,7 +1266,7 @@ function isAnimated(buffer){
     return false;
 }
 
-async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name);let m=null,dim=null;
+async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name);let m=null,dim=null,jt='';
     if(vid){
         // Container walk only - readVideoMeta never buffers the file. The old "Video" placeholder
         // stays as the failure path, so an unparseable container is no worse off than before.
@@ -1266,8 +1274,12 @@ async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name)
         if(r&&r.text){const u=unwrapMeta(r.text);m=u.obj?parseSettings(u.obj):parseMetadata(u.text)}
         if(!hasMeta(m))m={pos:"",neg:"",meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};
         dim=dimStr(r&&r.dim);
-    }else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b))}
-    const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim};if(vid)i.vm=VMETA;
+        // Free: the container walk already produced this text. Only files cached by an earlier build
+        // have to be re-read, which is what buildJsonIndex() is for.
+        try{jt=jsonBlob(videoChunks(r&&r.text))}catch(e){}
+    }else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b));
+        try{jt=jsonBlob(await readTextChunks(b))}catch(e){}}
+    const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim,jt,jv:JSONV};if(vid)i.vm=VMETA;
     cache.set(p,i);dPut(i)}catch{}}
 // Entries cached by an older build have no `dim`. Backfilling reads only the file's first 64KB
 // rather than re-running the full metadata parse.
@@ -2174,7 +2186,7 @@ async function personFromDetail(act,c){
     popPeople(v);
     showToast(act==='rm'?`Removed ${esc(AIC.get(id)||('person-'+id))}.`:`Tagged ${esc(AIC.get(id)||('person-'+id))}.`,'success');
 }
-// exitDetail() first: aiSearchCluster() calls setView('list') -> rend(), which would otherwise
+// exitDetail() first: aiSearchCluster() calls setView() -> rend(), which would otherwise
 // rebuild the grid behind a detail overlay that is still up.
 function peopleFromDetail(id){exitDetail();aiSearchCluster(id)}
 function nav(d){const n=aIdx+d;if(n>=0&&n<cFiles.length){aIdx=n;upDet()}}
@@ -2280,6 +2292,85 @@ async function readTextChunks(buffer){
     out.forEach(c=>{try{c.json=JSON.parse(c.text)}catch(e){c.json=null}});
     return out;
 }
+
+// ===================== JSON SEARCH INDEX =====================
+// `m` is a summary - prompt, model, sampler, a handful of numbers. Everything else the graph carries
+// (node class types, user-typed titles, upscale model names, custom-node widget values) is
+// unreachable by the other search fields. `jt` is the embedded metadata itself, minified and
+// lowercased, so json: can reach it.
+//
+// Order is PRESERVED and nothing is deduped. A deduped token bag would be much smaller, but joining
+// unrelated fragments manufactures adjacencies that are not in the file - json:"ckpt_name":"flux"
+// would then report matches that do not exist. A search named "search the JSON" must not invent
+// substrings.
+const JSONV=1, JT_CAP=262144;
+// UI-graph geometry: pure layout integers, never a search target, and the bulk of `workflow`.
+// widgets_values and title are NOT here - they are the whole point of the feature.
+const JT_DROP=new Set(['links','order','flags','bgcolor','color','shape','extra','ds',
+    'last_node_id','last_link_id','groups','config','localized_name','slot_index','link']);
+// pos/size/bounding are geometry ONLY as [x,y] pairs. A custom node with inputs.size = 1024 is a
+// real search target, so these three are dropped by shape rather than by name.
+const JT_DROP_ARR=new Set(['pos','size','bounding']);
+function jtStrip(x){
+    if(Array.isArray(x))return x.map(jtStrip);
+    if(!x||typeof x!=='object')return x;
+    const o={};for(const k in x){
+        if(JT_DROP.has(k)||(JT_DROP_ARR.has(k)&&Array.isArray(x[k])))continue;
+        o[k]=jtStrip(x[k]);
+    }
+    return o;
+}
+// Takes CHUNKS, never a buffer. proc() branches videos through readVideoMeta on purpose - a
+// buffer-taking extractor would pull entire videos into memory and undo that.
+function jsonBlob(chunks){
+    let s='';
+    for(const c of(chunks||[])){
+        if(!c||!c.text)continue;
+        let t=c.text;
+        // Non-JSON chunks (A1111's parameters block, Grok's Signature) go in verbatim rather than
+        // being dropped - they are metadata too.
+        try{t=JSON.stringify(jtStrip(JSON.parse(t)))}catch(e){}
+        s+=(c.keyword||'')+' '+t+'\n';
+        if(s.length>JT_CAP)break;
+    }
+    return s.slice(0,JT_CAP).toLowerCase();
+}
+// Same branch viewJSON() takes, and for the same reason.
+async function fileChunks(h,vid){
+    const f=await h.getFile();
+    if(vid||RX_VIDEO.test(f.name)){const r=await readVideoMeta(f);return videoChunks(r&&r.text)}
+    return await readTextChunks(await f.arrayBuffer());
+}
+const jtNeeds=v=>!!v&&v.jv!==JSONV;
+// An explicit button, not something runSearch triggers. scheduleSearch debounces at 160ms, so a
+// query-driven build would kick off a full-library re-read at "json:f" - and the repo's precedent
+// is already this way round: the duplicate scan is a button and AI analysis is an opt-in job.
+let jtJob=null;
+async function buildJsonIndex(){
+    if(jtJob){showToast('Already indexing.','info');return}
+    if(!fReg.size){showToast('Open your image folder first.','info');return}
+    const todo=[];for(const[p,h]of fReg)if(jtNeeds(cache.get(p)))todo.push([p,h]);
+    if(!todo.length){showToast('JSON index is already up to date.','success');return}
+    if(!confirm(`Index the embedded metadata of ${todo.length.toLocaleString()} file${todo.length===1?'':'s'}?\n\n`
+        +`Each is re-read from disk — this can take a while on a large library. Nothing is modified, and it only has to run once.`))return;
+    jtJob={n:0,bytes:0,total:todo.length};jtWarned=null;   // the count is about to change
+    const ov=document.getElementById('load'),msg=document.getElementById('loadMsg');
+    ov.classList.remove('hidden');
+    const paint=()=>{msg.textContent=`Indexing metadata — ${jtJob.n.toLocaleString()} of ${jtJob.total.toLocaleString()}`};
+    paint();
+    const upd=[];
+    try{
+        await dupPool(todo,async([p,h])=>{
+            const v=cache.get(p);if(!v)return;
+            try{v.jt=jsonBlob(await fileChunks(h,v.v))}catch(e){v.jt=''}
+            v.jv=JSONV;jtJob.bytes+=v.jt.length;upd.push(v);
+            if(++jtJob.n%25===0){paint();await new Promise(r=>setTimeout(r,0))}
+        },8);
+        for(let i=0;i<upd.length;i+=500)await dPutMany(upd.slice(i,i+500));
+    }finally{jtJob=null;msg.textContent='';ov.classList.add('hidden')}
+    showToast(`Indexed ${upd.length.toLocaleString()} file${upd.length===1?'':'s'} · ${fmtBytes(upd.reduce((a,v)=>a+(v.jt||'').length,0))} of searchable metadata. json: is live.`,'success');
+}
+// =================== END JSON SEARCH INDEX ===================
 
 async function viewJSON(){
     if(!cItem){showToast('Open an image first.','info');return}
@@ -2535,7 +2626,8 @@ async function renameFile(){
 //   and   := unary (AND? unary)*
 //   unary := ('-'|'!'|NOT) unary | '(' or ')' | term
 //   term  := [field:]("quoted phrase" | word)
-const FIELD_ALIAS={file:'name',filename:'name',fn:'name',folder:'path',dir:'path',pos:'prompt',positive:'prompt',prompt:'prompt',negative:'neg',neg:'neg',model:'model',checkpoint:'model',ckpt:'model',sampler:'sampler',seed:'seed',steps:'steps',cfg:'cfg',size:'size',dim:'size',resolution:'size',lora:'lora',resource:'lora',res:'lora',name:'name',path:'path',face:'face',person:'face',who:'face',sem:'sem',like:'like'};
+const FIELD_ALIAS={file:'name',filename:'name',fn:'name',folder:'path',dir:'path',pos:'prompt',positive:'prompt',prompt:'prompt',negative:'neg',neg:'neg',model:'model',checkpoint:'model',ckpt:'model',sampler:'sampler',seed:'seed',steps:'steps',cfg:'cfg',size:'size',dim:'size',resolution:'size',lora:'lora',resource:'lora',res:'lora',name:'name',path:'path',face:'face',person:'face',who:'face',sem:'sem',like:'like',
+    json:'json',raw:'json',meta:'json',metadata:'json',workflow:'json',node:'json'};
 
 function advTokenize(q){
     const T=[],ws=c=>/\s/.test(c);let i=0;
@@ -2589,9 +2681,21 @@ function searchFields(p,v){
         // so face:rob and face:person-12 each match, and a multi-person image matches all of them.
         // c<0 is the noise bucket (a face too isolated to be a person yet). peopleOf() drops it, or
         // the literal token "person--1" would make every unclustered face match face:person.
-        face:peopleOf(v).map(c=>`${AIC.get(c)||'unnamed'} person-${c}`).join(' ').toLowerCase()};
+        face:peopleOf(v).map(c=>`${AIC.get(c)||'unnamed'} person-${c}`).join(' ').toLowerCase(),
+        // Already lowercased when the blob was built - it is far too big to re-lower per query.
+        json:v.jt||''};
+    // json is deliberately LEFT OUT of f.all. Every ComfyUI image contains "ksampler", "cfg",
+    // "seed", "model" and its own node ids, so folding it in would make bare-word search match
+    // most of the library. Reachable only through an explicit json: term.
     f.all=[f.name,f.path,f.prompt,f.neg,f.model,f.sampler,f.seed,f.steps,f.cfg,f.size,f.lora,f.face].join('  ');
     return f;
+}
+let jtWarned=null;
+function advHasJson(n){
+    if(!n)return false;
+    if(n.t==='and'||n.t==='or')return advHasJson(n.a)||advHasJson(n.b);
+    if(n.t==='not')return advHasJson(n.a);
+    return n.t==='term'&&!!n.field&&(FIELD_ALIAS[n.field]||n.field)==='json';
 }
 function advEval(n,f){
     if(!n)return true;
@@ -2608,14 +2712,23 @@ async function runSearch(q){
     // finishes last and clobbers cFiles with stale results.
     const seq=++searchSeq;
     const sems=[],ast=advExtractSem(advParse(q),sems,false),a=[];
+    // f.json is defined-but-empty on an unindexed item, so advEval correctly refuses to fall through
+    // to f.all - and correctly returns false for every file. Without this counter the result is an
+    // empty list that looks like an honest "no matches".
+    const wantJson=advHasJson(ast);let unIdx=0;
     for(const[p,v]of cache){
         if(!v)continue;
         const fh=fReg.get(p);if(!fh)continue;
         if(showFavoritesOnly&&!favorites.has(p))continue;
         if(!passModel(p))continue;
+        if(wantJson&&jtNeeds(v))unIdx++;
         if(!advEval(ast,searchFields(p,v)))continue;
         a.push({p,h:fh,d:v.d||0,n:v.n||fh.name});
     }
+    // Latched on the COUNT, not the query text. Keyed on the query it re-fires for every prefix the
+    // debounce lets through - typing json:karras would toast three times.
+    if(unIdx&&jtWarned!==unIdx){jtWarned=unIdx;
+        showToast(`${unIdx.toLocaleString()} ${unIdx===1?'file has':'files have'} no JSON index yet, so json: cannot see ${unIdx===1?'it':'them'} — "Build JSON index" in ⚙ advanced search.`,'info')}
     let scored=false;
     if(sems.length){
         const qv=await aiQueryVecs(sems);if(seq!==searchSeq)return;
@@ -3810,7 +3923,7 @@ function showPeople(){
 function aiSearchCluster(id){
     const q='face:person-'+id;
     const i=document.getElementById('sIn');if(!i)return;
-    setView('list');i.value=q;i.classList.add('adv-on');setClearVis(true);scheduleSearch(q);
+    setView(libView);i.value=q;i.classList.add('adv-on');setClearVis(true);scheduleSearch(q);
     showToast('Showing every photo of this person. 👥 in the toolbar goes back.','info');
 }
 // Clustering reliably over-splits - the same person at a different angle lands in its own group -
