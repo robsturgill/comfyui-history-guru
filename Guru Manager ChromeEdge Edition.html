@@ -124,6 +124,7 @@ body.mode-detail .inspector{position:relative;transform:none;border-left:1px sol
 .bot-bar{display:flex;gap:10px}.btn-full{flex:1;padding:12px;border-radius:8px;background:var(--bd);color:var(--txt);border:none;cursor:pointer;font-weight:600}.btn-pri{background:var(--acc);color:#fff}
     .btn-dang{flex:0 0 auto;padding:12px 18px;background:transparent;border:1px solid var(--ai-bad);color:var(--ai-bad)}
     .btn-dang:hover{background:var(--ai-bad);color:#fff}
+body.remote-lib .no-remote{display:none!important}
 .overlay{position:fixed;inset:0;background:rgba(9,9,11,0.95);z-index:5000;display:flex;flex-direction:column;align-items:center;justify-content:center}.hidden{display:none}
 .spin{width:40px;height:40px;border:4px solid #333;border-top-color:var(--acc);border-radius:50%;animation:s 1s linear infinite;margin-bottom:20px}@keyframes s{to{transform:rotate(360deg)}}
 /* #load's backdrop is a hardcoded near-black in BOTH themes, so its text can't come from --txt /
@@ -348,7 +349,7 @@ body.sel-mode .sel-cb{display:block}
         </div>
     </div>
     <div class="head-tools">
-    <button class="btn" onclick="initFileSystem()" title="Open Folder"><span class="btn-long">Open Folder</span><span class="btn-short">📂</span></button>
+    <button class="btn no-remote" onclick="initFileSystem()" title="Open Folder"><span class="btn-long">Open Folder</span><span class="btn-short">📂</span></button>
     <button class="btn" style="background:transparent;border:1px solid var(--bd);color:var(--txt)" onclick="fullScan()" title="Refresh">↻</button>
     <div class="head-sep"></div>
     <button id="bStats" class="btn-icon" onclick="toggleStats()" title="Metadata Statistics">📊</button>
@@ -630,27 +631,262 @@ function syncLorasFromPrompt() {
     renderLoraEditor();
 }
 
+
+// ===================== REMOTE LIBRARY (node serve.mjs --dir <folder>) =====================
+// When the page is served by a library-mode server, the folder and the index live on that server and this
+// section stands in for the two things the rest of the app takes for granted: File System Access handles,
+// and IndexedDB. Everything below is inert unless /api/config answers {library:true} (see remoteBoot), so
+// the double-click and plain `node serve.mjs` paths are exactly what they were.
+//
+// Contract, so the 19 getFile() sites, scD() and fReg/dReg keep working untouched:
+//  - RDir / RFileH quack like FileSystemDirectoryHandle / FileSystemFileHandle.
+//  - getFile() NEVER downloads. It returns an RFile that knows name/size/lastModified from the tree and
+//    reads bytes only through slice()/arrayBuffer(), as HTTP Range requests. That keeps the duplicate
+//    scan's "size bucket" stage and sort-by-created free, and keeps readVideoMeta() reading a few KB of a
+//    video rather than the video (CLAUDE.md: never f.arrayBuffer() a video).
+//  - Where a real Blob is unavoidable (createImageBitmap, <img> via Image()), call toBlob(f). Where only a
+//    URL is needed (<img>/<video> src), call mediaURL(f): remote files hand back their /lib/ URL.
+let REMOTE=null;   // {name,local,writable,tier,tree} once the server says it is a library
+const rApi=async(path,o={})=>{
+    const h={...(o.headers||{})};
+    if(o.method&&o.method!=='GET'&&o.method!=='HEAD')h['X-Guru']='1';   // server refuses mutations without it (CSRF)
+    const r=await fetch(path,{...o,headers:h});
+    if(!r.ok){let m=r.statusText;try{m=(await r.json()).error||m}catch(e){}const e=new Error(m);e.status=r.status;throw e}
+    return r;
+};
+const rUrl=p=>'/lib/'+p.split('/').map(encodeURIComponent).join('/');
+const R_MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',mp4:'video/mp4',webm:'video/webm',mov:'video/quicktime',mkv:'video/x-matroska'};
+const rMime=n=>R_MIME[(n.split('.').pop()||'').toLowerCase()]||'application/octet-stream';
+const mediaURL=f=>f&&f.url?f.url:URL.createObjectURL(f);
+const toBlob=async f=>f&&f.toBlob?await f.toBlob():f;
+
+class RSlice{
+    constructor(file,a,b){this.file=file;this.a=a;this.b=b;this.size=b-a}
+    slice(a=0,b=this.size){
+        const n=this.size,cl=x=>x<0?Math.max(0,n+x):Math.min(x,n);
+        a=cl(a);b=cl(b);return new RSlice(this.file,this.a+a,this.a+Math.max(a,b));
+    }
+    async arrayBuffer(){
+        if(this.size<=0)return new ArrayBuffer(0);
+        const r=await rApi(this.file.url,{headers:{Range:`bytes=${this.a}-${this.b-1}`}});
+        const buf=await r.arrayBuffer();
+        return r.status===206?buf:buf.slice(this.a,this.b);   // a server that ignored Range sent the whole file
+    }
+    async text(){return new TextDecoder().decode(await this.arrayBuffer())}
+}
+class RFile extends RSlice{
+    constructor(p,s,m){
+        super(null,0,s);this.file=this;this.p=p;this.name=p.slice(p.lastIndexOf('/')+1);
+        this.lastModified=m;this.type=rMime(this.name);this.url=rUrl(p)+'?m='+m;
+    }
+    async toBlob(){const r=await rApi(this.url);return new File([await r.blob()],this.name,{type:this.type,lastModified:this.lastModified})}
+}
+class RFileH{
+    constructor(p,s,m){this.kind='file';this.p=p;this.name=p.slice(p.lastIndexOf('/')+1);this.s=s;this.m=m}
+    async getFile(){return new RFile(this.p,this.s,this.m)}
+}
+class RDir{
+    constructor(p){this.kind='directory';this.p=p;this.name=p?p.slice(p.lastIndexOf('/')+1):(REMOTE&&REMOTE.name)||''}
+    // The root re-reads the tree (that is what every fullScan/refresh wants); subfolders use that same snapshot.
+    async *values(){
+        if(this.p==='')await rLoadTree();
+        const t=REMOTE.tree;
+        for(const d of t.kids.get(this.p)||[])yield new RDir(d);
+        for(const f of t.files.get(this.p)||[])yield new RFileH(f.p,f.s,f.m);
+    }
+}
+async function rLoadTree(){
+    const t=await(await rApi('/api/tree')).json(),kids=new Map(),files=new Map();
+    const par=p=>p.includes('/')?p.slice(0,p.lastIndexOf('/')):'';
+    for(const d of t.dirs){const k=par(d);(kids.get(k)||kids.set(k,[]).get(k)).push(d)}
+    for(const f of t.files){const k=par(f.p);(files.get(k)||files.set(k,[]).get(k)).push(f)}
+    REMOTE.tree={kids,files};
+}
+
+// ---- Index storage: the five IndexedDB wrappers (iDB/dPut/dDel/dPutMany/dAll) delegate here. ----
+// Records can hold typed arrays (emb, faces[].emb, cent), which JSON can't carry, so they travel as
+// {$ta:'Int8Array',b64:'...'}.
+const R_TA={Int8Array,Uint8Array,Int16Array,Uint16Array,Int32Array,Uint32Array,Float32Array,Float64Array};
+function rB64(u){let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)}
+function rUnB64(s){const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+const rEnc=(k,v)=>ArrayBuffer.isView(v)?{$ta:v.constructor.name,b64:rB64(new Uint8Array(v.buffer,v.byteOffset,v.byteLength))}:v;
+const rDec=(k,v)=>{
+    if(v&&typeof v==='object'&&typeof v.$ta==='string'&&typeof v.b64==='string'){
+        const C=R_TA[v.$ta];if(C){const u=rUnB64(v.b64);return new C(u.buffer,0,u.length/C.BYTES_PER_ELEMENT)}
+    }
+    return v;
+};
+// 53-bit string hash plus length. Collisions would mean a changed field silently not being saved, so it
+// has to be strong, but it only has to fit in memory for every field of every record.
+function rHash(s){
+    let h1=0xdeadbeef,h2=0x41c6ce57;
+    for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}
+    h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+    h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+    return(4294967296*(2097151&h2)+(h1>>>0))+':'+s.length;
+}
+const R={shadow:new Map(),revs:new Map(),dirty:new Map(),waiters:[],timer:0,busy:false,warned:0};
+const rReserved=p=>p[0]==='_'&&!p.includes('.');
+
+// WHY DIFFS. Each client holds a snapshot of every record from when it loaded. Writing a whole record back
+// from a stale snapshot would erase whatever another device saved since (embeddings, faces, hand-tagged
+// people). So the shadow remembers a hash of each top-level field as the server last had it, and a write
+// sends only the fields that differ from that. The app mutates records in place, which is why the shadow
+// holds hashes, not references.
+function rSigs(it){
+    const sigs=new Map(),raw=new Map();
+    for(const k in it){
+        if(k==='p')continue;
+        const s=JSON.stringify(it[k],rEnc);
+        if(s===undefined)continue;
+        sigs.set(k,rHash(s));raw.set(k,s);
+    }
+    return{sigs,raw};
+}
+const rJoin=(raw,keys)=>'{'+keys.map(k=>JSON.stringify(k)+':'+raw.get(k)).join(',')+'}';
+function rOp(p,it){
+    if(it===null)return{body:`{"p":${JSON.stringify(p)},"del":true}`,commit:()=>R.shadow.delete(p)};
+    const {sigs,raw}=rSigs(it),sh=R.shadow.get(p),ifRev=rReserved(p)?`,"ifRev":${R.revs.get(p)||0}`:'';
+    const commit=()=>R.shadow.set(p,sigs);
+    // Never seen on the server: send it whole (also what a record re-created after a delete needs).
+    if(!sh)return{body:`{"p":${JSON.stringify(p)},"rec":${rJoin(raw,[...raw.keys()])}${ifRev}}`,commit,p,raw,changed:[...raw.keys()],gone:[]};
+    const changed=[...sigs.keys()].filter(k=>sh.get(k)!==sigs.get(k)),gone=[...sh.keys()].filter(k=>!sigs.has(k));
+    if(!changed.length&&!gone.length)return null;
+    return{body:`{"p":${JSON.stringify(p)},"set":${rJoin(raw,changed)}${gone.length?`,"unset":${JSON.stringify(gone)}`:''}${ifRev}}`,commit,p,raw,changed,gone};
+}
+async function rSend(batch){
+    const ops=[];
+    for(const [p,it] of batch){const o=rOp(p,it);if(o)ops.push(o)}
+    // Chunked so one 10k-record Analyze run isn't one multi-hundred-MB request.
+    for(let i=0;i<ops.length;){
+        let n=0,j=i;while(j<ops.length&&(j===i||n<3e6)){n+=ops[j].body.length;j++}
+        const part=ops.slice(i,j);i=j;
+        let res=await(await rApi('/api/index',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"ops":['+part.map(o=>o.body).join(',')+']}'})).json();
+        for(const [p,r] of Object.entries(res.revs||{}))R.revs.set(p,r);
+        const lost=new Set((res.conflicts||[]).map(c=>c.p));
+        for(const o of part)if(!lost.has(o.p))o.commit();
+        // A conditional write (__ai__) lost a race. Re-apply only the fields THIS client changed on top of
+        // the current copy, so the other writer's other fields survive; last writer wins per field.
+        for(let tries=0;tries<3&&res.conflicts&&res.conflicts.length;tries++){
+            const again=[];
+            for(const c of res.conflicts){
+                R.revs.set(c.p,c.rev);
+                const o=part.find(x=>x.p===c.p);if(!o)continue;
+                again.push({o,body:`{"p":${JSON.stringify(c.p)},"set":${rJoin(o.raw,o.changed)}${o.gone.length?`,"unset":${JSON.stringify(o.gone)}`:''},"ifRev":${c.rev}}`});
+            }
+            if(!again.length)break;
+            res=await(await rApi('/api/index',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"ops":['+again.map(a=>a.body).join(',')+']}'})).json();
+            for(const [p,r] of Object.entries(res.revs||{}))R.revs.set(p,r);
+            const lost2=new Set((res.conflicts||[]).map(c=>c.p));
+            for(const a of again)if(!lost2.has(a.o.p))a.o.commit();
+        }
+    }
+}
+// One write in flight at a time, in order, coalesced per key (last write wins, so a put queued after a
+// delete can't be overtaken by it and resurrect the record). The returned promise settles only once the
+// server has it: aiAnalyze's resumability relies on `await dPutMany(...)` meaning "durable".
+function rQueue(entries){
+    if(!entries.length)return rDrain().then(()=>true);
+    for(const [p,it] of entries)R.dirty.set(p,it);
+    const pr=new Promise(ok=>R.waiters.push(ok));
+    if(!R.timer)R.timer=setTimeout(rFlush,40);
+    return pr;
+}
+async function rFlush(){
+    R.timer=0;
+    if(R.busy)return;   // the running loop re-checks R.dirty when it finishes
+    R.busy=true;
+    try{
+        while(R.dirty.size){
+            const batch=R.dirty,waiters=R.waiters;R.dirty=new Map();R.waiters=[];
+            let ok=true;
+            try{await rSend(batch)}
+            catch(e){
+                ok=false;
+                for(const [p,it] of batch)if(!R.dirty.has(p))R.dirty.set(p,it);   // keep it; a newer write wins
+                if(Date.now()-R.warned>10000){R.warned=Date.now();showToast('Could not save to the server: '+e.message,'error')}
+                if(!R.timer)R.timer=setTimeout(rFlush,3000);
+                waiters.forEach(w=>w(false));
+                break;
+            }
+            waiters.forEach(w=>w(ok));
+        }
+    }finally{R.busy=false}
+}
+async function rDrain(){
+    if(R.timer){clearTimeout(R.timer);R.timer=0}
+    const idle=async()=>{while(R.busy)await new Promise(r=>setTimeout(r,25))};
+    await idle();await rFlush();await idle();   // rFlush loops until empty, or stops at the first failure
+}
+const rPut=it=>it&&it.unindexed?Promise.resolve(true):rQueue([[it.p,it]]);   // placeholders are display-only, never saved
+const rDel=k=>rQueue([[k,null]]);
+const rPutMany=a=>rQueue(a.filter(i=>!i.unindexed).map(i=>[i.p,i]));
+async function rLoadIndex(){
+    await rDrain();   // never reload over unsaved writes
+    R.shadow.clear();R.revs.clear();
+    const r=await rApi('/api/index'),rd=r.body.getReader(),dec=new TextDecoder();
+    let buf='',head=true;
+    const line=s=>{
+        if(!s)return;
+        const x=JSON.parse(s,rDec);
+        if(head){head=false;for(const [p,v] of Object.entries(x.revs||{}))R.revs.set(p,v);return}
+        if(x.del||typeof x.p!=='string')return;
+        R.shadow.set(x.p,rSigs(x).sigs);
+        if(rReserved(x.p))aiLoadMeta(x);else cache.set(x.p,x);
+    };
+    for(;;){
+        const {done,value}=await rd.read();if(done)break;
+        buf+=dec.decode(value,{stream:true});
+        let s=0,i;while((i=buf.indexOf('\n',s))>=0){line(buf.slice(s,i));s=i+1}
+        buf=buf.slice(s);
+    }
+    line(buf+dec.decode());
+}
+// A device that isn't the host can browse and search but must not index: proc() reads whole files, and
+// the host's GPU is the point. It gets an in-memory stand-in (never saved: rPut drops `unindexed`) until
+// the host indexes the file.
+function rPlaceholder(h,p){
+    const vid=RX_VIDEO.test(h.name);
+    cache.set(p,{p,n:h.name,d:h.m,firstSeen:h.m,m:{pos:"",neg:"",meta:{model:"Not indexed"},resources:[]},v:vid,dim:null,jt:'',jv:JSONV,unindexed:true});
+    REMOTE.unindexed=(REMOTE.unindexed||0)+1;
+}
+async function remoteBoot(){
+    let c;
+    try{const r=await fetch('/api/config');if(!r.ok)return;c=await r.json()}catch(e){return}   // file:// or no server
+    if(!c||!c.library)return;
+    REMOTE={name:c.name||'Library',local:!!c.local,writable:!!c.writable,tier:c.tier||null,tree:null,unindexed:0};
+    document.body.classList.add('remote-lib');
+    document.title='History Guru — '+REMOTE.name;
+    rH=new RDir('');
+    document.getElementById('wel').classList.add('hidden');
+    document.getElementById('load').classList.remove('hidden');
+    try{await fullScan()}
+    catch(e){document.getElementById('load').classList.add('hidden');showToast('Could not load the library: '+e.message,'error');return}
+    if(REMOTE.unindexed)showToast(`${REMOTE.unindexed} file(s) are not indexed yet. Open this server on the host machine to index them.`,'info');
+}
+// ===================== END REMOTE LIBRARY =====================
+
 // DB
-const iDB=()=>new Promise((r,j)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains("i"))e.target.result.createObjectStore("i",{keyPath:"p"})};q.onsuccess=e=>{db=e.target.result;r()};q.onerror=j});
-const dPut=i=>new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").put(i);t.oncomplete=r});
-const dDel=k=>new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").delete(k);t.oncomplete=r});
+const iDB=()=>REMOTE?Promise.resolve():new Promise((r,j)=>{const q=indexedDB.open(DB,1);q.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains("i"))e.target.result.createObjectStore("i",{keyPath:"p"})};q.onsuccess=e=>{db=e.target.result;r()};q.onerror=j});
+const dPut=i=>REMOTE?rPut(i):new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").put(i);t.oncomplete=r});
+const dDel=k=>REMOTE?rDel(k):new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").delete(k);t.oncomplete=r});
 // One transaction for the whole array - a per-item dPut over a 10k-item analysis run is 10k transactions.
-const dPutMany=a=>new Promise(r=>{const t=db.transaction("i","readwrite"),s=t.objectStore("i");for(const i of a)s.put(i);t.oncomplete=r});
+const dPutMany=a=>REMOTE?rPutMany(a):new Promise(r=>{const t=db.transaction("i","readwrite"),s=t.objectStore("i");for(const i of a)s.put(i);t.oncomplete=r});
 // Keys starting '_' are reserved app-level records (the '__ai__' sentinel), not cache entries - they
 // share store "i" so the schema stays at version 1, so they have to be split back out here. The
 // extra no-'.' test is what makes this safe: every cache key is a path ending in a media extension,
 // so a real folder named '_archive' can never be mistaken for a reserved record and dropped.
-const dAll=()=>new Promise(r=>{const t=db.transaction("i","readonly");t.objectStore("i").getAll().onsuccess=e=>{e.target.result.forEach(x=>{if(typeof x.p==='string'&&x.p[0]==='_'&&!x.p.includes('.'))aiLoadMeta(x);else cache.set(x.p,x)});r()}});
+const dAll=()=>REMOTE?rLoadIndex():new Promise(r=>{const t=db.transaction("i","readonly");t.objectStore("i").getAll().onsuccess=e=>{e.target.result.forEach(x=>{if(typeof x.p==='string'&&x.p[0]==='_'&&!x.p.includes('.'))aiLoadMeta(x);else cache.set(x.p,x)});r()}});
 
 // FS
-async function initFileSystem(){try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
+async function initFileSystem(){if(REMOTE)return;try{rH=await window.showDirectoryPicker({mode:"readwrite"});document.getElementById('wel').classList.add('hidden');document.getElementById('load').classList.remove('hidden');clearURLs();await iDB();await fullScan();}catch(e){alert("Access denied.")}}
 // jtWarned is latched on a COUNT, so a different library with the same number of unindexed files
 // would inherit the suppression and never warn.
 async function fullScan(){document.getElementById('load').classList.remove('hidden');clearURLs();cache.clear();fReg.clear();dReg.clear();dReg.set('',rH);aiInvalidateMat();jtWarned=null;await dAll();await scD(rH,"");rTree();buildModelFilter();syncSortUI();await opD(null,"");document.getElementById('load').classList.add('hidden')}
 // NOTE: opD's filter is `!h || parentOf(file)===p`. Passing rH restricts the list to loose files
 // sitting directly in the root, so a library kept in subfolders renders empty. null = "All Files",
 // matching what the sidebar's All Files entry (which rTree marks active) already does.
-async function scD(h,p){for await(const e of h.values()){const ep=p?`${p}/${e.name}`:e.name;if(e.kind==='directory'){dReg.set(ep,e);await scD(e,ep)}else if(RX_MEDIA.test(e.name)){fReg.set(ep,e);if(!cache.has(ep))await proc(e,ep);else await backfillDim(e,ep)}}}
+async function scD(h,p){for await(const e of h.values()){const ep=p?`${p}/${e.name}`:e.name;if(e.kind==='directory'){dReg.set(ep,e);await scD(e,ep)}else if(RX_MEDIA.test(e.name)){fReg.set(ep,e);if(!cache.has(ep)){if(REMOTE&&!REMOTE.local)rPlaceholder(e,ep);else await proc(e,ep)}else if(!(REMOTE&&!REMOTE.local))await backfillDim(e,ep)}}}
 
 // --- BRAIN (Accumulative Fix) ---
 async function decompressZlib(data) {try {const ds = new DecompressionStream('deflate-raw'); const writer = ds.writable.getWriter(); writer.write(data.slice(2, data.length - 4)); writer.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());} catch (e) {try {const ds = new DecompressionStream('deflate'); const writer = ds.writable.getWriter(); writer.write(data); writer.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());} catch(e2) { return null; }}}
@@ -1395,8 +1631,12 @@ async function dupPartialHash(r){
 async function dupFullHash(r){
     const c=cache.get(r.path);
     if(c&&c.sha&&c.shaSize===r.size&&c.shaMtime===r.mtime)return c.sha;
-    const f=await r.handle.getFile();
-    const hex=await digestHex(new Uint8Array(await f.arrayBuffer()));
+    // Library mode hashes on the server: no whole-file download (a video would be hundreds of MB), and no
+    // crypto.subtle on a plain-HTTP LAN page, whose JS fallback hash would disagree with the host's SHA-256
+    // inside the one shared index.
+    let hex;
+    if(REMOTE)hex=(await(await rApi('/api/hash?p='+encodeURIComponent(r.path))).json()).sha;
+    else{const f=await r.handle.getFile();hex=await digestHex(new Uint8Array(await f.arrayBuffer()))}
     if(c){c.sha=hex;c.shaSize=r.size;c.shaMtime=r.mtime;dPut(c)}
     return hex
 }
@@ -1532,14 +1772,14 @@ async function loadDupThumb(el){
     const g=dupGroups[+el.dataset.g];if(!g)return;
     const f=g.files[+el.dataset.i];if(!f)return;
     try{
-        const u=URL.createObjectURL(await f.handle.getFile());objURLs.add(u);
+        const u=mediaURL(await f.handle.getFile());objURLs.add(u);
         const img=el.querySelector('img');if(img)img.src=u
     }catch(e){console.warn('Thumbnail failed for',f.path,e)}
 }
 async function dupPreview(gi,fi){
     const f=dupGroups[gi]&&dupGroups[gi].files[fi];if(!f)return;
     try{
-        const u=URL.createObjectURL(await f.handle.getFile());objURLs.add(u);
+        const u=mediaURL(await f.handle.getFile());objURLs.add(u);
         const lb=document.createElement('div');lb.className='dup-lightbox';
         lb.innerHTML=`<img src="${u}" alt=""><div class="dup-lb-cap">${esc(f.path)} · ${fmtBytes(f.size)}</div>`;
         const close=()=>{lb.remove();document.removeEventListener('keydown',onKey,true)};
@@ -1862,7 +2102,7 @@ async function loadTileMedia(host){
     const h=fReg.get(host.dataset.lazy);if(!h)return;
     const el=host.querySelector('img,video');if(!el)return;
     try{
-        const file=await h.getFile(),u=URL.createObjectURL(file);objURLs.add(u);
+        const file=await h.getFile(),u=mediaURL(file);objURLs.add(u);
         const target=vidFallback(el,h.name);if(target)target.src=u;
         const cell=host.querySelector('.date-modified');
         if(cell&&host.dataset.d&&file.lastModified!==+host.dataset.d){
@@ -2083,7 +2323,7 @@ async function upDet(){
     if(aIdx<0||aIdx>=cFiles.length)return;
     const f=cFiles[aIdx],mt=cache.get(f.p);cItem=f;
     const con=document.getElementById('mediaCon');con.innerHTML='';
-    const fl=await f.h.getFile(),u=URL.createObjectURL(fl),el=document.createElement(mt.v?'video':'img');
+    const fl=await f.h.getFile(),u=mediaURL(fl),el=document.createElement(mt.v?'video':'img');
     objURLs.add(u);
     el.className='detail-media';if(mt.v){el.controls=true;el.autoplay=true}con.appendChild(el);
     vidFallback(el,f.h.name);el.src=u;
@@ -2526,7 +2766,7 @@ async function fixSave(){
             // readDims doubles as a decodable-image check: no recognised header, no conversion.
             if(!readDims(b)){showToast("Not a readable image — nothing was written.","error");return}
             if(isAnimated(b)&&!confirm("This file is animated.\n\nSaving flattens it to a single-frame PNG and deletes the original. Continue?"))return;
-            const i=new Image(),u=URL.createObjectURL(f);objURLs.add(u);i.src=u;
+            const i=new Image(),u=mediaURL(await toBlob(f));objURLs.add(u);i.src=u;
             // Must settle on failure too - a decode error used to hang this await indefinitely.
             const ok=await new Promise(r=>{i.onload=()=>r(true);i.onerror=()=>r(false);setTimeout(()=>r(false),20000)});
             if(!ok||!i.width||!i.height){showToast("Could not decode this image — nothing was written.","error");return}
@@ -3395,7 +3635,7 @@ async function aiAnalyze(){
 function aiCancelJob(){if(aiJob){aiJob.cancel=true;try{aiW.postMessage({t:'cancel'})}catch(e){}}}
 
 async function aiDoImage(f){
-    const bmp=await createImageBitmap(f);
+    const bmp=await createImageBitmap(await toBlob(f));
     try{
         const r=await aiSend({t:'img',bitmap:bmp,want:{clip:true,faces:true}},120000,[bmp]);
         return{emb:r.emb,embS:r.embS,faces:r.faces||[],aiMs:r.ms};
@@ -3407,7 +3647,7 @@ async function aiDoImage(f){
 // (.mkv) never fires 'loadedmetadata' at all - it errors, or it hangs.
 async function aiDoVideo(f){
     if(!aiVid){aiVid=document.createElement('video');aiVid.muted=true;aiVid.preload='metadata';aiVid.playsInline=true}
-    const v=aiVid,u=URL.createObjectURL(f);
+    const v=aiVid,u=mediaURL(f);
     const race=(ev,ms)=>new Promise((res,rej)=>{
         const to=setTimeout(()=>{cl();rej(Object.assign(new Error('video timeout'),{code:'nodecode'}))},ms);
         const ok=()=>{cl();res()},bad=()=>{cl();rej(Object.assign(new Error('video decode failed'),{code:'nodecode'}))};
@@ -3849,7 +4089,7 @@ async function aiDrawCrop(cv){
     const p=cv.dataset.p,i=+cv.dataset.i,v=cache.get(p),h=fReg.get(p);
     if(i<0||!v||!h||!v.faces||!v.faces[i])return;   // i<0 = hand-tagged, no detection box to crop
     try{
-        const b=v.faces[i].box,bmp=await createImageBitmap(await h.getFile());
+        const b=v.faces[i].box,bmp=await createImageBitmap(await toBlob(await h.getFile()));
         const pad=Math.max(b[2],b[3])*0.35;
         const x=Math.max(0,b[0]-pad),y=Math.max(0,b[1]-pad);
         const w=Math.min(bmp.width-x,b[2]+pad*2),hh=Math.min(bmp.height-y,b[3]+pad*2);
@@ -4079,4 +4319,5 @@ function aiLoadMeta(rec){if(!rec||rec.p!=='__ai__')return;aiMeta=rec;AIC=new Map
 const aiNeeds=it=>!!it&&!it.aiSkip&&(it.ai!==AIV);
 (function(){if(!aiOK())['aiBtn','peopleBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.add('ai-off')})})();
 // =================== END AI SEARCH ===================
+remoteBoot();
 </script></body></html>

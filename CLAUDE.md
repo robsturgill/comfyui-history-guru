@@ -562,6 +562,35 @@ Read these before touching either; they are the only code that lets a network cl
   compacts via temp file + rename and keeps `.bak.N` of what it replaced (the only backup the index has).
   `/api/*` and `/lib/*` are only mounted when `--dir` is set.
 
+#### The page side — grep `// ===================== REMOTE LIBRARY`
+
+Inert unless `remoteBoot()` (last line of the script) gets `{library:true}` from `/api/config`; on
+`file://` the fetch fails and is ignored. `REMOTE` is the flag every branch tests.
+
+- **Handle look-alikes** (`RDir`, `RFileH`, `RFile`) let `scD`, `fReg`/`dReg` and the 19 `getFile()` sites
+  run unchanged. **`getFile()` never downloads.** `RFile` has `name/size/lastModified` from `/api/tree` and
+  reads bytes only via `slice()`/`arrayBuffer()` as Range requests. That is what keeps the duplicate scan's
+  size stage and sort-by-created free, and `readVideoMeta` at a few KB. Do not make it fetch the body.
+- **Two helpers decide how a file is consumed.** `mediaURL(f)`: only a URL needed (`<img>`/`<video>`), remote
+  files return their `/lib/` URL. `toBlob(f)`: a real Blob is unavoidable (`createImageBitmap`, `new Image()`
+  in `fixSave`). Never call `URL.createObjectURL(await h.getFile())` directly, or a remote file throws.
+- **The five IndexedDB wrappers branch on `REMOTE`** and nothing else touches `db`. Writes go through a
+  queue: one in flight, coalesced per key (a put queued after a delete wins), and the promise resolves only
+  when the server has it, which `aiAnalyze`'s resumability depends on.
+- **Writes are field diffs.** `R.shadow` holds a hash of each top-level field as the server last had it
+  (hashes, not references: the app mutates records in place). Anything new goes whole (`rec`); otherwise only
+  changed fields (`set`/`unset`). `__ai__` carries `ifRev`, and a lost race re-applies only this client's
+  fields on top of the current copy. Typed arrays travel as `{$ta,b64}` (`rEnc`/`rDec`).
+- **Only the host indexes.** `REMOTE.local` (server saw a loopback peer) gates `proc()`/`backfillDim()` in the
+  bulk scan. Others get `rPlaceholder()` entries flagged `unindexed`, which `rPut`/`rPutMany` drop so a
+  stand-in can never become a server record that the host then skips as "already indexed".
+- **"Open Folder" is hidden** (`.no-remote`) and `initFileSystem()` returns early. A local `rH` over
+  server-backed wrappers would write foreign paths into the shared index.
+- **The `db={...}` stub recipe above does not apply here**: in library mode there is no `db`, writes go to
+  the server. Test against a *copy* of the library (`--dir <copy>`), never the real one.
+- **Index size is the scaling limit.** `jt` averages ~115 KB/record on `samples/` (~1 GB per 10k images),
+  held in server memory and downloaded in full by every client on load.
+
 Everything is behind `aiOK()`. Opened by double-click the app behaves **exactly as before**; the only
 delta is a dimmed 🧠 button. `localStorage['guru-ai']='off'` is a hard kill switch.
 
