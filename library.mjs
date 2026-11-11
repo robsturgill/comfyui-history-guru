@@ -312,7 +312,7 @@ export function createLibrary(cfg){
             catch(e){ await unlink(tmp).catch(() => {}); throw e }
             try{ await rename(tmp, abs) }catch(e){ await unlink(tmp).catch(() => {}); throw e }
             dropTree(); hashes.delete(rel);
-            return json(res, 200, {ok: true, size: n});
+            return json(res, 200, {ok: true, size: n, m: Math.floor((await stat(abs)).mtimeMs)});
         }
 
         case 'dir': {

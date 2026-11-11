@@ -167,6 +167,8 @@ GPU machine, click Analyze there, and the results are saved on the server for ev
 **Using it.** Open `http://<host>:8787/` on any device (the browser asks for the password). The page detects the server and loads the library from it: no Open Folder, no import. Thumbnails, video and the JSON viewer stream from the server, and a video's metadata is read with a few small Range requests rather than a download.
 
 *   **The host indexes, the others browse.** A device on the LAN never scans or analyses; files the host hasn't indexed yet show as *Not indexed* until the host opens the page (the host is the browser running on the server machine itself, i.e. a loopback connection). That keeps whole-file reads and the GPU work in one place.
+*   **Full file management from any device.** Move (drag into the sidebar), rename, delete, new folder and *Fix & Save* all work from a LAN device, exactly as they do on the host. Moves are renames on the server's disk, not a download and re-upload. Writes land via a temp file and an atomic rename.
+*   **Stars are shared.** Favorites are stored in the index, so every device sees the same ones, and they follow a file when it is moved or renamed.
 *   **Duplicate hashing runs on the server**, so a scan never downloads a video, and results agree whichever device starts it.
 *   **Index size.** The embedded workflow text (`json:` search) dominates the index: about 115 KB per image on a typical ComfyUI library, so roughly 1 GB per 10,000 images on disk and in the server's memory, and every page load downloads it (gzip helps a lot). Fine on a wired LAN for a few thousand images; a known follow-up is serving it lazily.
 

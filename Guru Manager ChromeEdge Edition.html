@@ -681,9 +681,30 @@ class RFile extends RSlice{
     }
     async toBlob(){const r=await rApi(this.url);return new File([await r.blob()],this.name,{type:this.type,lastModified:this.lastModified})}
 }
+const rPath=(dir,name)=>dir?dir+'/'+name:name;
+const rQ=p=>'?p='+encodeURIComponent(p);
+const rMove=(from,to)=>rApi('/api/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from,to})});
 class RFileH{
     constructor(p,s,m){this.kind='file';this.p=p;this.name=p.slice(p.lastIndexOf('/')+1);this.s=s;this.m=m}
     async getFile(){return new RFile(this.p,this.s,this.m)}
+    // Like the real FileSystemWritableFileStream, nothing reaches the file until close(). The server writes to a
+    // temp file and renames it into place, so a dropped connection never leaves half a file.
+    async createWritable(){
+        const chunks=[],h=this;
+        return{
+            async write(d){chunks.push(d&&d.type==='write'?d.data:d)},
+            async close(){
+                const blob=new Blob(chunks),j=await(await rApi('/api/file'+rQ(h.p),{method:'PUT',body:blob})).json();
+                h.s=j.size;h.m=j.m||Date.now();
+            }
+        };
+    }
+    // Same contract as FileSystemHandle.move(newName): renames in place and the SAME object stays valid, because
+    // fReg, cFiles[].h and cItem all keep holding it.
+    async move(newName){
+        const np=rPath(this.p.includes('/')?this.p.slice(0,this.p.lastIndexOf('/')):'',newName);
+        await rMove(this.p,np);this.p=np;this.name=newName;
+    }
 }
 class RDir{
     constructor(p){this.kind='directory';this.p=p;this.name=p?p.slice(p.lastIndexOf('/')+1):(REMOTE&&REMOTE.name)||''}
@@ -693,6 +714,20 @@ class RDir{
         const t=REMOTE.tree;
         for(const d of t.kids.get(this.p)||[])yield new RDir(d);
         for(const f of t.files.get(this.p)||[])yield new RFileH(f.p,f.s,f.m);
+    }
+    // Creation happens on first write (createWritable().close()), as with a real handle's lazy create.
+    async getFileHandle(name,o){return new RFileH(rPath(this.p,name),0,0)}
+    async getDirectoryHandle(name,o){
+        const p=rPath(this.p,name);
+        if(o&&o.create)await rApi('/api/mkdir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p})});
+        return new RDir(p);
+    }
+    // One call serves files and folders. The tree says which; a name made this session isn't in it yet, so fall
+    // back to the extension (the server refuses non-media files, and non-recursive rmdir refuses a full folder).
+    async removeEntry(name){
+        const t=REMOTE.tree,p=rPath(this.p,name);
+        const isFile=(t.files.get(this.p)||[]).some(f=>f.p===p)||(!(t.kids.get(this.p)||[]).includes(p)&&RX_MEDIA.test(name));
+        await rApi((isFile?'/api/file':'/api/dir')+rQ(p),{method:'DELETE'});
     }
 }
 async function rLoadTree(){
@@ -818,6 +853,9 @@ async function rDrain(){
     const idle=async()=>{while(R.busy)await new Promise(r=>setTimeout(r,25))};
     await idle();await rFlush();await idle();   // rFlush loops until empty, or stops at the first failure
 }
+// Favorites are a flag on the record, not a Set in localStorage, so every device sees the same stars, they
+// travel with a move/rename (the record is copied), and a diff only ever touches `fav`.
+function rFavSave(path){const it=cache.get(path);if(!it||it.unindexed)return;if(favorites.has(path))it.fav=true;else delete it.fav;dPut(it)}
 const rPut=it=>it&&it.unindexed?Promise.resolve(true):rQueue([[it.p,it]]);   // placeholders are display-only, never saved
 const rDel=k=>rQueue([[k,null]]);
 const rPutMany=a=>rQueue(a.filter(i=>!i.unindexed).map(i=>[i.p,i]));
@@ -841,6 +879,7 @@ async function rLoadIndex(){
         buf=buf.slice(s);
     }
     line(buf+dec.decode());
+    favorites=new Set([...cache.values()].filter(v=>v.fav).map(v=>v.p));
 }
 // A device that isn't the host can browse and search but must not index: proc() reads whole files, and
 // the host's GPU is the point. It gets an in-memory stand-in (never saved: rPut drops `unindexed`) until
@@ -1565,7 +1604,7 @@ function updateThumbSize(val){document.documentElement.style.setProperty('--thum
 // vMode was restored from guru-view at declaration, so the toolbar glyph has to be brought into
 // agreement with it - setView() is what normally does that, and nothing has called it yet.
 setTimeout(()=>{const vt=document.getElementById('viewToggle');if(vt)vt.textContent=vMode==='grid'?'☰':'🔲'},0)})();
-function toggleFavorite(path){if(favorites.has(path)){favorites.delete(path)}else{favorites.add(path)}localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));rend()}
+function toggleFavorite(path){if(favorites.has(path)){favorites.delete(path)}else{favorites.add(path)}localStorage.setItem('guru-favorites',JSON.stringify([...favorites]));if(REMOTE)rFavSave(path);rend()}
 // ===================== DUPLICATE DETECTION =====================
 // Content-based, filename-independent, spans every subfolder under the opened root.
 // Three escalating stages so 1000s of images stay cheap:
@@ -2275,17 +2314,25 @@ async function moveFile(payload, destFolder){
         if(srcPath === newPath) continue;
         try {
             const srcHandle = fReg.get(srcPath);
-            const file = await srcHandle.getFile();
-            const destHandle = dReg.get(destFolder) || rH;
-            const newFileHandle = await destHandle.getFileHandle(fName, { create: true });
-            const writable = await newFileHandle.createWritable();
-            await writable.write(file);
-            await writable.close();
-            const srcParent = srcPath.includes('/') ? srcPath.substring(0, srcPath.lastIndexOf('/')) : "";
-            const srcParentHandle = dReg.get(srcParent) || rH;
-            await srcParentHandle.removeEntry(fName);
+            let newFileHandle;
+            if(REMOTE){
+                // The server renames on disk: copy+delete from here would send a video through the browser.
+                await rMove(srcPath, newPath);
+                newFileHandle = new RFileH(newPath, srcHandle.s, srcHandle.m);
+            }else{
+                const file = await srcHandle.getFile();
+                const destHandle = dReg.get(destFolder) || rH;
+                newFileHandle = await destHandle.getFileHandle(fName, { create: true });
+                const writable = await newFileHandle.createWritable();
+                await writable.write(file);
+                await writable.close();
+                const srcParent = srcPath.includes('/') ? srcPath.substring(0, srcPath.lastIndexOf('/')) : "";
+                const srcParentHandle = dReg.get(srcParent) || rH;
+                await srcParentHandle.removeEntry(fName);
+            }
             const meta = cache.get(srcPath);
             cache.delete(srcPath); fReg.delete(srcPath); await dDel(srcPath);
+            if(favorites.delete(srcPath)){favorites.add(newPath);localStorage.setItem('guru-favorites',JSON.stringify([...favorites]))}
             fReg.set(newPath, newFileHandle);
             const newItem = { ...meta, p: newPath };
             cache.set(newPath, newItem); await dPut(newItem);
@@ -2791,13 +2838,16 @@ async function fixSave(){
             const nn = f.name.replace(/\.[^/.]+$/,".png");
             finalHandle = await d.getFileHandle(nn, {create:true});
             finalPath = par ? `${par}/${nn}` : nn;
-            // Remove old non-PNG entry
+        }
+
+        // Write BEFORE removing the original: a failed write (a dropped connection, a full disk) must not leave
+        // the user with neither file. nn===f.name is a JPEG that was merely named .png: overwrite it in place.
+        const w=await finalHandle.createWritable();
+        await w.write(new Blob(ch,{type:'image/png'})); await w.close();
+        if(!isPng && finalPath!==cItem.p){
             await d.removeEntry(f.name);
             fReg.delete(cItem.p); cache.delete(cItem.p); await dDel(cItem.p);
         }
-
-        const w=await finalHandle.createWritable();
-        await w.write(new Blob(ch,{type:'image/png'})); await w.close();
         
         fReg.set(finalPath, finalHandle);
         await proc(finalHandle, finalPath);

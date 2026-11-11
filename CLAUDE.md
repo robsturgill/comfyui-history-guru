@@ -584,6 +584,17 @@ Inert unless `remoteBoot()` (last line of the script) gets `{library:true}` from
 - **Only the host indexes.** `REMOTE.local` (server saw a loopback peer) gates `proc()`/`backfillDim()` in the
   bulk scan. Others get `rPlaceholder()` entries flagged `unindexed`, which `rPut`/`rPutMany` drop so a
   stand-in can never become a server record that the host then skips as "already indexed".
+- **Write path.** `RFileH.createWritable()` buffers and PUTs on `close()` (nothing reaches the file before
+  that, like the real stream; the server swaps a temp file in). `move(newName)` renames and keeps the **same
+  handle object** valid, which `renameFile` depends on: `fReg`, `cFiles[].h` and `cItem` all hold it.
+  `removeEntry` asks the tree whether the name is a file or a folder (falling back to the extension for names
+  made this session). `moveFile` takes a `REMOTE` branch to `POST /api/move`, so bytes never pass through the
+  browser. `PUT` returns the real `m`, which becomes the handle's mtime.
+- **`fixSave` writes before it deletes**, in both modes. Removing the original first meant a failed write lost
+  the image. Don't reorder it back.
+- **Favorites are `fav:true` on the record** in library mode (`rFavSave`), rebuilt into the `favorites` Set at
+  the end of `rLoadIndex`. Not a `__fav__` blob: `dAll` routes `_` keys to `aiLoadMeta`, and one shared Set is
+  last-write-wins. A move carries the star in both modes.
 - **"Open Folder" is hidden** (`.no-remote`) and `initFileSystem()` returns early. A local `rH` over
   server-backed wrappers would write foreign paths into the shared index.
 - **The `db={...}` stub recipe above does not apply here**: in library mode there is no `db`, writes go to

@@ -171,7 +171,9 @@ test('mutations need X-Guru, and a foreign Origin is refused', async () => {
 // ---------------------------------------------------------------------------------- file writes
 
 test('PUT writes atomically, overwrites, leaves no temp file, and the tree sees it', async () => {
-    assert.equal((await call('/api/file?p=' + q('a/new.png'), {method: 'PUT', body: 'first'})).status, 200);
+    const put1 = await call('/api/file?p=' + q('a/new.png'), {method: 'PUT', body: 'first'});
+    assert.equal(put1.status, 200);
+    assert.deepEqual([put1.json().size, put1.json().m > 1e12], [5, true]);   // the client needs the real mtime back
     assert.equal(readFileSync(join(LIB, 'a/new.png'), 'utf8'), 'first');
     assert.equal((await call('/api/file?p=' + q('a/new.png'), {method: 'PUT', body: 'second!'})).status, 200);
     assert.equal(readFileSync(join(LIB, 'a/new.png'), 'utf8'), 'second!');
