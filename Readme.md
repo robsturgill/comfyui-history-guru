@@ -131,7 +131,25 @@ Opened the old way, the app behaves exactly as before, with the 🧠 button dimm
 
 ---
 
-## 🌐 Server Options (`serve.mjs`)
+## 🌐 Host Once, Browse From Anywhere (`serve.mjs`)
+
+Run the server on the machine with the GPU and the images; use the gallery from every other device on the LAN, with one shared index and nothing to import.
+
+```bash
+# on the GPU machine (a recent Node, no install step)
+node serve.mjs --hash-password          # type a password, Enter, then Ctrl-D (Ctrl-Z on Windows); copy the printed hash
+cp guru.config.example.json guru.config.json
+#   edit: dir (your output folder), passwordHash, and delete the "tls" block if you have no certificate yet
+node serve.mjs
+```
+
+1. **On the GPU machine**, open `http://localhost:8787`, sign in, and click 🧠 → *Analyze*. The scan, the embeddings and the faces are computed there and saved on the server.
+2. **On any other device**, open `http://<that machine's LAN address>:8787` (the startup banner prints it) and sign in. The gallery, every search, People and file management are there, and the index is already loaded.
+3. **For `sem:` on other devices**, give the server a certificate (`tls` in the config, or `--tls-cert/--tls-key`) and open it over `https://`. See *What works where* below.
+
+The portable single-file mode is unchanged: double-click the HTML, or `node serve.mjs` with no `--dir`, and nothing here applies.
+
+### Server options
 
 `node serve.mjs` is still loopback-only with no password, exactly as before. Options, as flags or in
 `guru.config.json` (git-ignored; precedence is flags > `GURU_*` environment > config file > defaults):

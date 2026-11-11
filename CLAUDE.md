@@ -12,7 +12,7 @@ would normally warrant a new module, add a clearly commented section instead.
 | App file | [Guru Manager ChromeEdge Edition.html](Guru%20Manager%20ChromeEdge%20Edition.html) (~1275 lines) |
 | Test data | `samples/` — folder1, folder2, folder3, video |
 | Test data | `samples/` is git-ignored and **has no backup**. Anything destructive (delete, `fixSave` conversion) is unrecoverable — copy the folder aside first if a test needs it |
-| Runtime | Chrome / Edge only (File System Access API). Runs from `file://` |
+| Runtime | Chrome / Edge only. Runs from `file://` (File System Access API), or from `serve.mjs` — optionally as a LAN *library server* (`--dir`), see [Library mode](#library-mode---dir--librarymjs-index-storemjs) |
 
 ---
 
@@ -87,6 +87,9 @@ Two files have an audio track, so their second `tkhd` reads `0x0` — that is th
 filter exists for.
 
 ---
+
+Library-mode tests: `node --test serve.test.mjs library.test.mjs` (no browser) and
+`node --test library.e2e.test.mjs` (Playwright; copies `samples/` to a temp dir first, so it is safe to run).
 
 ## Core state (line ~216)
 

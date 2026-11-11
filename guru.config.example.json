@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy to guru.config.json (git-ignored). Relative paths resolve against this file. Flags and GURU_* environment variables override anything here.",
+  "dir": "D:/ComfyUI/output",
+  "host": "0.0.0.0",
+  "port": 8787,
+  "passwordHash": "REPLACE: run  node serve.mjs --hash-password  and paste its output here",
+  "tls": {
+    "cert": "certs/guru.crt",
+    "key": "certs/guru.key"
+  },
+  "data": "./data",
+  "allowedHosts": ["gpu-box"]
+}
