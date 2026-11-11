@@ -166,7 +166,7 @@ The portable single-file mode is unchanged: double-click the HTML, or `node serv
 
 *   **A password is mandatory off-loopback.** `--lan` or any non-loopback `--host` refuses to start without one. HTTP Basic auth, any username, one shared password, applied to every request.
 *   **Keep the password out of `ps` and the repo.** Prefer `GURU_PASSWORD`, or `node serve.mjs --hash-password` (reads stdin) and put the resulting `passwordHash` in the config file.
-*   **Plain HTTP puts the password on the wire in cleartext**, and browsers only run the on-device AI on a secure context. `--tls-cert/--tls-key` fixes both; a locally trusted certificate (e.g. mkcert) avoids the per-device warning.
+*   **Plain HTTP puts the password on the wire in cleartext**, and browsers only run the on-device AI on a secure context. `--tls-cert/--tls-key` fixes both. `node make-cert.mjs` creates `certs/guru.crt` + `certs/guru.key` covering this machine's hostname and LAN IPs (re-run with `--force` if the IP changes). It uses [mkcert](https://github.com/FiloSottile/mkcert) when installed, which avoids the per-device warning once its CA is trusted; otherwise it falls back to a self-signed openssl cert.
 *   **`Host` is checked** (IP literals, `localhost` and this machine's hostname pass; add a DNS name with `--allow-host`), which blocks DNS-rebinding from a hostile web page.
 *   **Only the app and `ai/` are served.** The config file, `data/`, `.git` and `samples/` are not downloadable.
 

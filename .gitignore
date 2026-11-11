@@ -65,3 +65,6 @@ ai/diagnostics/
 # LAN library server: the password lives in the config, and data/ is the shared index
 guru.config.json
 data/
+
+# TLS cert + private key for serve.mjs
+certs/

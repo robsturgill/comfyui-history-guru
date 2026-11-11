@@ -135,7 +135,7 @@ export function validateConfig(cfg){
     if(!isLoopback(cfg.host) && !hasPw)
         return `Refusing to listen on ${cfg.host} without a password. Set GURU_PASSWORD, --password, or the config file.`;
     if(!!cfg.tlsCert !== !!cfg.tlsKey) return '--tls-cert and --tls-key must be given together.';
-    for(const f of [cfg.tlsCert, cfg.tlsKey]) if(f && !existsSync(f)) return `TLS file not found: ${f}`;
+    for(const f of [cfg.tlsCert, cfg.tlsKey]) if(f && !existsSync(f)) return `TLS file not found: ${f}\nCreate one with: node make-cert.mjs`;
     return null;
 }
 
