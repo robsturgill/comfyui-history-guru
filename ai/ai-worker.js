@@ -480,10 +480,16 @@ function doCluster(m){
   // over the settled centroids can see that.
   const par = new Int32Array(cents.length); for (let i = 0; i < cents.length; i++) par[i] = i;
   const find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
-  for (let a = 0; a < cents.length; a++) for (let b = a + 1; b < cents.length; b++){
-    let d = 0; const A = cents[a], B = cents[b];
-    for (let j = 0; j < D; j++) d += A[j] * B[j];
-    if (d >= MT){ const ra = find(a), rb = find(b); if (ra !== rb) par[ra < rb ? rb : ra] = ra < rb ? ra : rb; }
+  // On a big library this pass is as long as the one above (C^2/2 dot products, C ~ tens of
+  // thousands) and used to post nothing, so the page's idle timeout fired mid-merge. Report rows.
+  const C = cents.length;
+  for (let a = 0; a < C; a++){
+    for (let b = a + 1; b < C; b++){
+      let d = 0; const A = cents[a], B = cents[b];
+      for (let j = 0; j < D; j++) d += A[j] * B[j];
+      if (d >= MT){ const ra = find(a), rb = find(b); if (ra !== rb) par[ra < rb ? rb : ra] = ra < rb ? ra : rb; }
+    }
+    if ((a & 63) === 0) post({t:'prog', id: m.id, done: a, total: C, phase: 'merge'});
   }
 
   const grp = new Map();

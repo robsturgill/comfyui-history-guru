@@ -63,28 +63,27 @@ while keeping the metadata byte-identical. The video won't decode (so `vidFallba
 every metadata path is exercised. The preview pane only executes files **inside the project folder**,
 so write the harness there and delete it afterwards.
 
-`samples/` is deliberately arranged to cover every duplicate case:
+**`samples/` was replaced (2026-11).** The folder1–3 duplicate set and the VHS / WanGP / Grok videos
+described below are gone, so the duplicate expectations, `library.e2e.test.mjs` and the `©cmt` rows
+of the video tables can no longer be re-verified locally — rebuild a duplicate set before trusting a
+duplicate-scan change. The current set:
 
-| Content | Files | Case exercised |
+| Content | Files | Exercises |
 |---|---|---|
-| A | `folder1/t2i_2026_07_21_00002_.png`, `folder3/t2i_2026_07_21_00002_.png`, `folder3/Comfyui-0002.png` | **3-way** group, cross-folder, one renamed |
-| B | `folder1/t2i_2026_07_21_00015_.png`, `folder2/t2i_2026_07_24_00015_88888.png` | sibling folders + renamed |
-| C | `folder1/t2i_2026_07_21_00019_.png`, `folder1/t2i_2026_07_21_00019_ - Copy.png` | same folder |
-| unique | `..._00014_`, `..._00017_`, `..._00018_` | must NOT be grouped |
+| krea2 t2i | `2026_10_31/*` (46), `2026_11_08/*` (4) | `PrimitiveString*` `value`, `ComfySwitchNode`, an LLM prompt-writer whose output is not in the file (shows the user's *input* prompt), `NO8DPromptView` holding the same text twice |
+| Qwen edit | `i2i_2026_11_04_00118_.png` | `TextEncodeQwenImageEditPlus.prompt` → `JoinStrings` (`string1`/`string2`, delimiter `" "`), 20 samplers in one graph, GGUF unet |
+| MiniMax H3 | `New folder/ComfyUI_00001_.png`, `SHEET_00106_.png` | `SamplerCustomAdvanced` + `BasicGuider`, `JoinStringMulti`, steps via rgthree `Any Switch` |
+| MiniMax H3 video | `video/test_h3-turbo_*.mp4` | core `SaveVideo`: **mdta keys** `workflow`/`prompt`/`encoder`, not `©cmt`; `Power Lora Loader` |
 
-Expected result: **3 groups, 7 files**. `samples/video/` does not affect this — all four videos have
-distinct byte sizes, so they are dropped at stage 1 of the duplicate scan.
+All 56 parse (`hasMeta`), with every `neg` empty — correct, they all use `ConditioningZeroOut` or no
+negative. The Node harness recipe above (vm-load the `<script>` with a recursive Proxy stub for
+`document`/`window`, plus `ResizeObserver`/`Worker`/`Image` stubs) is the quickest way to check.
 
-`samples/video/` covers the three `©cmt` shapes described in [Video metadata](#video-metadata):
-
-| File | Writer | Exercises |
-|---|---|---|
-| `2026-07-23.mp4`, `2026-07-24.mp4` | ComfyUI VHS `VideoCombine` | escaped-graph unwrap, WAN two-sampler graph, 2 LoRAs, `1024x1536` from `tkhd` |
-| `2026-07-23-00h47m40s_…giraffe speaks.mp4` | WanGP / LTX-2 | flat settings dict → `parseSettings`, `activated_loras`, `960x960` (note its `resolution` field claims `1280x704` — the container wins) |
-| `grok-video-….mp4` | Grok | **no** AI metadata (`Signature:` + a `covr` JPEG); must degrade to the `Video` placeholder while still showing `416x736` |
-
-Two files have an audio track, so their second `tkhd` reads `0x0` — that is the case the `w > 0`
-filter exists for.
+What the old set covered, kept for reference: duplicates A (3-way, cross-folder, renamed), B (sibling
+folders + renamed), C (same folder) and three uniques → **3 groups, 7 files**; videos VHS
+`VideoCombine` (escaped-graph unwrap, WAN two-sampler), WanGP/LTX-2 (flat settings dict, `resolution`
+field disagrees with the container — the container wins), Grok (no AI metadata, `Video` placeholder
+with `416x736`). Two had an audio track whose `tkhd` reads `0x0` — the case the `w > 0` filter exists for.
 
 ---
 
@@ -260,6 +259,13 @@ Three shapes show up in practice, and all three are covered:
 | ComfyUI VHS `VideoCombine` | `{"prompt":"<escaped graph>"}` — note **no `workflow` key**, matching [VHS #486](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite/issues/486) | `unwrapMeta` → `parseMetadata` → `parseComfy` |
 | WanGP / DeepBeepMeep | flat settings dict: `prompt`, `negative_prompt`, `resolution`, `seed`, `num_inference_steps`, `guidance_scale`, `activated_loras`, `model_type` | `unwrapMeta` → `parseSettings` |
 | Grok video | `Signature: <base64>` — not AI metadata at all | falls through to the `Video` placeholder, but still gets `dim` |
+| ComfyUI core `SaveVideo` | **not `©cmt`**: mdta keys `workflow`, `prompt`, `encoder`, each holding raw (unescaped) JSON | `mp4Moov` re-wraps keyed items as `{key:value}` → `videoChunks` → `parseGraphs` |
+
+`mp4Moov` used to join every item's value with `'\n'`, which for the keyed case lost the key names and
+made text no `JSON.parse` accepts. Only the keyed branch changed; the `©cmt`/`NAMED` path is
+byte-identical. `proc()` tries `parseGraphs(chunks)` (exact `JSON.parse` per chunk, API `prompt` graph
+before UI `workflow`) **before** the old `unwrapMeta`/`parseMetadata` text sniffing, for images too —
+`readTextChunks` already separates PNG chunks by keyword.
 
 `hasMeta()` decides whether a parse recovered anything; if not, `proc()` keeps the **old placeholder**
 (`model:"Video"`, `meta.size` = file size in MB). That fallback is deliberate — an unparseable
@@ -268,7 +274,15 @@ that path; when metadata parses, `dim` supplies the resolution.
 
 Cached videos carry a `vm` stamp. `backfillDim()` re-runs `proc()` for any video whose `vm !== VMETA`,
 so **bump `VMETA` when the video parser changes** rather than bumping `DB` — the latter would discard
-every image's cached metadata too.
+every image's cached metadata too. Images have the same thing as `MV` (stamp `mv`), but
+`backfillDim()` only re-reads an image whose cached parse looks broken (`!hasMeta` or empty `pos`) —
+re-reading a 20k library to re-confirm good parses is the cost that avoids.
+
+**`proc()` merges into an existing record; it must never replace it.** It used to build a fresh
+object, and backfill (plus `fixSave`) re-runs it on cached items — which silently dropped `emb`,
+`faces`, `pA`/`pR`, `fav`, `sha` and `firstSeen`. In library mode the diff writer then sent those as
+`unset`, erasing them from the shared index for every device. Any VMETA bump before this fix did that
+to every video's AI data.
 
 `fixSave()` stays images-only. Rewriting a `moov` means recomputing every `stco`/`co64` offset in the
 file; there is no safe hand-rolled version of that.
@@ -288,6 +302,29 @@ don't "simplify" them back out:
    encoder into it to synthesise an empty negative, so recursing through it reported the positive
    text as the negative. It now returns `""`. This is why the PNG samples correctly show an empty
    negative — that is right, not a regression.
+
+The 2026-11 samples (krea2, Qwen, MiniMax H3) exposed more, again in images and video alike:
+
+4. **`KSamplerSelect` was picked as "the sampler".** `includes('KSampler')` matches it, and it precedes
+   `SamplerCustomAdvanced` in node order; it has no model or conditioning, so the whole file parsed as
+   nothing. Selector/scheduler/sigmas nodes are excluded, and a candidate with `positive`/`guider`/
+   `model` wins.
+5. **`SamplerCustomAdvanced` holds no values.** Model, conditioning and cfg are on the `guider`
+   (BasicGuider has one `conditioning`, CFGGuider positive/negative), the seed on `noise`, steps and
+   scheduler on `sigmas`, the name on `sampler`. They are pulled onto a copy of its inputs first.
+6. **`PrimitiveString`/`PrimitiveStringMultiline` keep text on `value`**, which no step read — so any
+   prompt routed through a primitive came out empty.
+7. **Switches took the first branch met, not the one that ran.** `follow()` resolves `ComfySwitchNode`
+   (`switch` → `on_true`/`on_false`, the selector usually itself a link to a PrimitiveBoolean) and
+   rgthree `Any Switch` (first connected `any_NN`) in the text, model *and* number walkers.
+8. **Step 3 then step 5 both walked a linked `prompt` input**, doubling it. Step 3 now marks every key
+   it consumes as `used`. Identical strings are also deduped (`NO8DPromptView` carries its text twice).
+9. **LLM prompt-writer nodes**: `system_prompt`/`instruction` inputs match the name test and were
+   spliced into the prompt. Skipped by name. When the LLM's *output* is the real prompt it isn't in
+   the file at all; the walk reports the user's input prompt instead, which is the best available.
+10. `string1`/`string2` (JoinStrings) didn't match `startsWith('string_')`; joiners now use their own
+    `delimiter`. `extractJSON` in `parseMetadata` is now string-aware, so a `{` inside a prompt no
+    longer ends the object early.
 
 ### Animated PNG and WebP
 
@@ -684,6 +721,26 @@ removing a person writes a suppression entry rather than editing `c`.
 
 `ai/src/people.test.mjs` drives the real page through Playwright against `node serve.mjs` and exists
 mainly for the re-cluster case. Verified by mutation: drop the `.concat(man)` and it fails.
+
+### Cluster ids are stable, and big libraries used to get no people at all
+
+- **The worker numbers clusters `0..n-1` by discovery order**, so adding photos renumbers them, and
+  names (`AIC`), `hidden` and `pA`/`pR` are all keyed by id — every re-cluster used to move "Rob" onto
+  a stranger. `aiStableIds()` maps each new cluster to the old one whose centroid matches (cos ≥ .55,
+  one-to-one, best first), but **only old clusters carrying user state** (named, hidden, or an id some
+  `pA`/`pR` uses) — all of them would be 10k×10k dot products on the main thread. Unmatched clusters
+  keep their worker id unless something reserved it, else take the lowest free id. No old id is
+  recycled in the same run. Unmatched *named/hidden/pA-referenced* old clusters are carried over at
+  `n:0` (`kept` in `aiCluster`), the same "zero members ≠ gone" rule. Mutation-verified by the
+  "stable across re-clustering" tests.
+- **Clustering is O(faces × clusters)** in the worker: 8k distinct faces ≈ 22s, so ~25k ≈ 4 min. The
+  page's old fixed 180s timeout killed it; Analyze reported failure *after* saving every embedding, so
+  faces existed with no `c` and People stayed empty. `aiSend`'s timeout is now an **idle** limit,
+  re-armed (`kick`) on each `prog` for that id, and the worker posts `phase:'merge'` progress during the
+  all-pairs centroid pass, which posted nothing before and is as long as the assignment pass.
+- **"Everything is already indexed" returned before clustering**, so such a library could never get
+  People back. `aiUngrouped()` (a face with `emb` and `c === undefined`) now routes Analyze to
+  `aiRegroup()`, which the panel also exposes as **Re-group faces**.
 
 Seeding `cache` alone is **not** enough to test scoring: `aiBuildMat()` filters on `fReg.has(p)`, so
 an item with a perfectly good `emb` that isn't in the file registry never enters the matrix, gets

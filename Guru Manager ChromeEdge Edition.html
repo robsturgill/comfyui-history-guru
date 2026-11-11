@@ -1083,7 +1083,17 @@ async function extractText(buffer) {
     }
     return fullText.replace(/\0/g, '');
 }
-function parseMetadata(text) {function extractJSON(str,startPos=0) {const start = str.indexOf('{',startPos); if (start === -1) return null; let count = 0, end = -1; for (let i = start; i < str.length; i++) { if (str[i] === '{') count++; else if (str[i] === '}') count--; if (count === 0) { end = i; break; } } if (end !== -1) try { return {json:JSON.parse(str.substring(start, end + 1)),end:end+1}; } catch(e) { return null; } return null;} let comfyResult=null;if (text.includes('"class_type"') && text.includes('"inputs"')) { let pos=0;while(true){const result=extractJSON(text,pos);if(!result)break;const json=result.json;pos=result.end;if(json&&(json.class_type||json.nodes||Object.values(json).some(v=>v&&typeof v==='object'&&(v.class_type||v.type)))){const parsed=parseComfy(json);if(parsed&&(parsed.pos||parsed.meta.model!=="?")){comfyResult=parsed;break}}}} if(!comfyResult&&(text.includes('"class_type"') || text.includes('"type"') || (text.includes('"inputs"') && (text.includes('KSampler') || text.includes('CLIPTextEncode') || text.includes('SaveImage') || text.includes('CLIPLoader') || text.includes('VAELoader'))))) { let pos=0;while(true){const result=extractJSON(text,pos);if(!result)break;const json=result.json;pos=result.end;if(json&&(json.class_type||json.nodes||json.type||Object.values(json).some(v=>v&&typeof v==='object'&&(v.class_type||v.type)))){const parsed=parseComfy(json);if(parsed&&(parsed.pos||parsed.meta.model!=="?")){comfyResult=parsed;break}}}} if(comfyResult)return comfyResult;return parseA1111(text);}
+// Parse already-separated JSON documents (PNG keyed chunks, mp4 mdta keys), API graphs before UI
+// graphs: the `prompt` graph carries real values, the `workflow` one only widget positions. Returns
+// null when none yields anything, so the caller can fall back to the text sniffing below.
+function parseGraphs(objs){
+    const g=(objs||[]).filter(o=>o&&typeof o==='object'&&!Array.isArray(o));
+    for(const o of g.filter(o=>!o.nodes).concat(g.filter(o=>o.nodes))){
+        try{const r=parseComfy(o);if(r&&(r.pos||r.meta.model!=="?"))return r}catch(e){}
+    }
+    return null;
+}
+function parseMetadata(text) {function extractJSON(str,startPos=0) {const start = str.indexOf('{',startPos); if (start === -1) return null; let count = 0, end = -1, inS = false, bs = false; for (let i = start; i < str.length; i++) { const ch = str[i]; if (inS) { if (bs) bs = false; else if (ch === '\\') bs = true; else if (ch === '"') inS = false; continue; } if (ch === '"') inS = true; else if (ch === '{') count++; else if (ch === '}') count--; if (count === 0) { end = i; break; } } if (end !== -1) try { return {json:JSON.parse(str.substring(start, end + 1)),end:end+1}; } catch(e) { return null; } return null;} let comfyResult=null;if (text.includes('"class_type"') && text.includes('"inputs"')) { let pos=0;while(true){const result=extractJSON(text,pos);if(!result)break;const json=result.json;pos=result.end;if(json&&(json.class_type||json.nodes||Object.values(json).some(v=>v&&typeof v==='object'&&(v.class_type||v.type)))){const parsed=parseComfy(json);if(parsed&&(parsed.pos||parsed.meta.model!=="?")){comfyResult=parsed;break}}}} if(!comfyResult&&(text.includes('"class_type"') || text.includes('"type"') || (text.includes('"inputs"') && (text.includes('KSampler') || text.includes('CLIPTextEncode') || text.includes('SaveImage') || text.includes('CLIPLoader') || text.includes('VAELoader'))))) { let pos=0;while(true){const result=extractJSON(text,pos);if(!result)break;const json=result.json;pos=result.end;if(json&&(json.class_type||json.nodes||json.type||Object.values(json).some(v=>v&&typeof v==='object'&&(v.class_type||v.type)))){const parsed=parseComfy(json);if(parsed&&(parsed.pos||parsed.meta.model!=="?")){comfyResult=parsed;break}}}} if(comfyResult)return comfyResult;return parseA1111(text);}
 
 function parseComfy(json) {
     let pos="", neg="", meta={model:"?",size:"?",seed:"?",steps:"?",cfg:"?",sampler:"?"}, resources=[];
@@ -1091,6 +1101,19 @@ function parseComfy(json) {
     let nodeMap = {};
     if(json.nodes&&Array.isArray(json.nodes)){nodes=json.nodes.map(n=>{const node={class_type:n.type||n.data?.class_type||"",inputs:n.inputs||n.data?.inputs||n.widgets_values?{}:{}};if(n.id!==undefined)nodeMap[n.id]=node;return node}).filter(n=>n.class_type||n.inputs)}else{const vals=Object.values(json);nodes=vals.filter(n=>n&&typeof n==='object'&&(n.class_type||n.inputs));vals.forEach((n,i)=>{if(n&&typeof n==='object'&&(n.class_type||n.inputs)){const key=Object.keys(json)[i];if(key&&!isNaN(key))nodeMap[key]=n}})}
     
+    const isLink=v=>Array.isArray(v)&&v.length>0&&(typeof v[0]==='string'||typeof v[0]==='number');
+    const refNode=v=>isLink(v)?(json[v[0]]||nodeMap[v[0]]||null):null;
+    // A switch's selector is usually itself a link to a PrimitiveBoolean/Int. undefined = can't tell.
+    const lit=(v,d=0)=>{if(!isLink(v))return v;const n=refNode(v);if(!n||d>8)return undefined;const i=n.inputs||{};
+        for(const k of['value','boolean','bool','int','number'])if(k in i)return lit(i[k],d+1);return undefined};
+    // Passthrough/switch nodes: the link that actually executed, or null when that can't be decided
+    // statically. Without this every walker below takes whichever branch it meets first, which on
+    // the krea2 graphs is the unused one.
+    const follow=n=>{const i=n.inputs||{};
+        if('on_true' in i||'on_false' in i){const s=lit(i.switch!==undefined?i.switch:i.boolean);return s===undefined?null:(s?i.on_true:i.on_false)||null}
+        // rgthree Any Switch passes through its first connected input; unconnected ones are absent.
+        if(/Any Switch/i.test(n.class_type||'')){const k=Object.keys(i).filter(k=>/^any_\d+$/.test(k)&&isLink(i[k])).sort()[0];return k?i[k]:null}
+        return null};
     // NEW ACCUMULATIVE RECURSION
     const findUpstreamText=(l,d=0)=>{
         if(d>10||!l||!Array.isArray(l))return"";
@@ -1098,38 +1121,44 @@ function parseComfy(json) {
         // ConditioningZeroOut discards whatever it is handed. Flux/Chroma graphs wire the *positive*
         // encoder into it to synthesise an empty negative, so recursing through would echo the
         // positive prompt back into the negative field.
-        if((n.class_type||n.type||"")==='ConditioningZeroOut')return"";
+        const ct=n.class_type||n.type||"";
+        if(ct==='ConditioningZeroOut')return"";
+        const br=follow(n);if(br)return findUpstreamText(br,d+1);
+        // StringConcatenate / JoinStrings / JoinStringMulti carry their own separator.
+        const sep=typeof inputs.delimiter==='string'?inputs.delimiter.replace(/\\n/g,'\n'):', ';
         let t = "";
+        // Identical text arrives twice when a viewer node keeps both its input and an edited copy.
+        const add=s=>{if(typeof s==='string'&&s&&!t.includes(s))t+=(t?sep:"")+s};
         // Keys consumed below are recorded so the generic sweep in step 3 doesn't add them a second
         // time - `text` matches its own key.includes('text') test, which used to double every prompt.
         const used = new Set();
         // 1. Local Text (from widgets_values for workflow format)
-        if(Array.isArray(n.widgets_values)&&n.widgets_values.length>0&&typeof n.widgets_values[0]==='string')t+=n.widgets_values[0];
+        if(Array.isArray(n.widgets_values)&&n.widgets_values.length>0&&typeof n.widgets_values[0]==='string')add(n.widgets_values[0]);
         // 2. Standard text inputs (known patterns)
-        if(typeof inputs.text==='string') {t+=(t?", ":"")+inputs.text;used.add('text')}
+        if(typeof inputs.text==='string') {add(inputs.text);used.add('text')}
         else if(Array.isArray(inputs.text)) {
             // Text is a node reference (e.g., ["1", 0]) - recurse into it
-            const r = findUpstreamText(inputs.text,d+1);
-            if(r) t+=(t?", ":"")+r;
+            add(findUpstreamText(inputs.text,d+1));
             used.add('text');
         }
-        if(typeof inputs.text_g==='string') {t+=(t?", ":"")+inputs.text_g;used.add('text_g')}
-        if(typeof inputs.text_l==='string') {t+=(t?", ":"")+inputs.text_l;used.add('text_l')}
-        if(inputs.string_field) {t+=(t?", ":"")+inputs.string_field;used.add('string_field')}
+        if(typeof inputs.text_g==='string') {add(inputs.text_g);used.add('text_g')}
+        if(typeof inputs.text_l==='string') {add(inputs.text_l);used.add('text_l')}
+        if(inputs.string_field) {add(inputs.string_field);used.add('string_field')}
+        // PrimitiveString / PrimitiveStringMultiline (and most string-literal nodes) keep the text on
+        // `value`. Missing this left every prompt routed through a primitive empty - krea2, Qwen, MiniMax.
+        if(/string|primitive|text/i.test(ct)&&typeof inputs.value==='string'){add(inputs.value);used.add('value')}
         // 3. Generic string input extraction (handles StringConcatenate, StringJoin, etc. without hardcoding)
-        // Look for any input that starts with "string_" or is a string value
+        // Look for any input that starts with "string_" or is a string value. An LLM prompt-writer's
+        // system prompt matches the name test too, and is never the image's prompt.
         for(const key in inputs){
-            if(used.has(key))continue;
-            if(key.startsWith('string_')||key.startsWith('str_')||key.includes('text')||key.includes('prompt')){
+            if(used.has(key)||/system|instruction/i.test(key))continue;
+            if(/^(string|str)(_|\d)/.test(key)||key.includes('text')||key.includes('prompt')){
                 const val=inputs[key];
-                if(typeof val==='string'&&val.length>0){
-                    // Skip delimiter-only values
-                    if(key!=='delimiter'||val.length>1)t+=(t?"":"")+val;
-                }else if(Array.isArray(val)&&val.length>0){
-                    // If it's an array reference, recurse
-                    const r=findUpstreamText(val,d+1);
-                    if(r)t+=(t?", ":"")+r;
-                }
+                if(typeof val==='string'&&val.length>0)add(val);
+                else if(Array.isArray(val)&&val.length>0)add(findUpstreamText(val,d+1));
+                // Step 5 re-walks 'prompt' - without this a node with a linked `prompt` input
+                // (TextEncodeQwenImageEditPlus, MiniMax) reported its prompt twice.
+                used.add(key);
             }
         }
         // 4. Special Lists (StandardTriggerWordsLoader)
@@ -1145,10 +1174,7 @@ function parseComfy(json) {
         const keys = (inputs.positive&&inputs.negative)
             ? [slot===1?'negative':'positive']
             : ['positive','negative','conditioning','clip','prompt','trigger_words'];
-        for(const k of keys) if(inputs[k]) {
-            const r = findUpstreamText(inputs[k],d+1);
-            if(r) t+=(t?", ":"")+r;
-        }
+        for(const k of keys) if(inputs[k]&&!used.has(k)) add(findUpstreamText(inputs[k],d+1));
         // 6. Generic fallback: if no text found yet, try recursing any array inputs that might be node references
         if(!t){
             for(const key in inputs){
@@ -1164,7 +1190,7 @@ function parseComfy(json) {
 
     // Inputs that carry something other than a model, so the generic walk below never follows them.
     const notModel=/clip|vae|image|latent|mask|cond|positive|negative|text|prompt|guider|sigmas|seed/;
-    const findUpstreamModel=(l,d=0,seen)=>{if(d>10||!l||!Array.isArray(l))return"";seen=seen||new Set();let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){if(seen.has(l[0]))return"";seen.add(l[0]);n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model){const r=findUpstreamModel(inputs.model,d+1,seen);if(r)return r}
+    const findUpstreamModel=(l,d=0,seen)=>{if(d>10||!l||!Array.isArray(l))return"";seen=seen||new Set();let n=null;if(typeof l[0]==='string'||typeof l[0]==='number'){if(seen.has(l[0]))return"";seen.add(l[0]);n=json[l[0]]||nodeMap[l[0]]}else if(typeof l[0]==='object'){n=l[0]}if(!n)return"";const br=follow(n);if(br)return findUpstreamModel(br,d+1,seen);const inputs=n.inputs||{};if(inputs.ckpt_name)return inputs.ckpt_name;if(inputs.unet_name)return inputs.unet_name;if(inputs.checkpoint_name)return inputs.checkpoint_name;if(inputs.model_name)return inputs.model_name;if(inputs.model){const r=findUpstreamModel(inputs.model,d+1,seen);if(r)return r}
         // Passthrough/switch/reroute nodes name their model port anything (on_true, input, any_01),
         // so fall back to following every node reference that isn't obviously another data type.
         for(const k in inputs){if(k==='model'||notModel.test(k))continue;const v=inputs[k];if(Array.isArray(v)&&v.length&&(typeof v[0]==='string'||typeof v[0]==='number')){const r=findUpstreamModel(v,d+1,seen);if(r)return r}}
@@ -1178,6 +1204,7 @@ function parseComfy(json) {
         if(typeof val==='string'&&val.trim()!==''&&isFinite(val))return +val;
         if(Array.isArray(val)&&val.length&&d<8){
             const n=json[val[0]]||nodeMap[val[0]];if(!n)return null;
+            const br=follow(n);if(br)return resolveNum(br,d+1,keys);
             const inp=n.inputs||{},ks=keys||[val[1]===1?'height':'width'];
             for(const k of ks)if(typeof inp[k]==='number')return inp[k];
             if(Array.isArray(n.widgets_values)){const nums=n.widgets_values.filter(x=>typeof x==='number');if(nums.length>(val[1]||0))return nums[val[1]||0]}
@@ -1186,8 +1213,21 @@ function parseComfy(json) {
         return null;
     };
     const samplerTypes = ["KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerEulerAncestralCFGPP", "SamplerLCM"];
-    const ksampler=nodes.find(n=>n.class_type&&samplerTypes.some(type=>n.class_type.includes(type)));
-    if(ksampler){const inputs=ksampler.inputs||{};const sv=inputs.seed!==undefined?inputs.seed:inputs.noise_seed;let sr=resolveNum(inputs.seed,0,['seed','noise_seed']);if(sr==null)sr=resolveNum(inputs.noise_seed,0,['seed','noise_seed']);meta.seed=sr!=null?sr:(Array.isArray(sv)?"?":(sv||"?"));meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
+    // includes() also matches KSamplerSelect, which only names the sampler and comes first in node
+    // order on every SamplerCustomAdvanced graph - picking it left model and prompt empty.
+    const sCands=nodes.filter(n=>n.class_type&&samplerTypes.some(type=>n.class_type.includes(type))&&!/Select|Scheduler|Sigmas/.test(n.class_type));
+    const ksampler=sCands.find(n=>{const i=n.inputs||{};return i.positive||i.guider||i.model})||sCands[0];
+    if(ksampler){const inputs=Object.assign({},ksampler.inputs||{});
+        // SamplerCustomAdvanced holds no values itself: model/conditioning/cfg are on the guider,
+        // the seed on the noise node, steps/scheduler on the sigmas node, the name on the sampler node.
+        // BasicGuider has a single `conditioning`; CFGGuider has positive/negative.
+        const fill=(n,map)=>{const i=n&&n.inputs;if(i)for(const[to,from]of map)if(inputs[to]==null&&i[from]!=null)inputs[to]=i[from]};
+        fill(refNode(inputs.guider),[['model','model'],['positive','positive'],['negative','negative'],['cfg','cfg'],['positive','conditioning']]);
+        fill(refNode(inputs.noise),[['noise_seed','noise_seed'],['noise_seed','seed']]);
+        fill(refNode(inputs.sampler),[['sampler_name','sampler_name']]);
+        fill(refNode(inputs.sigmas),[['steps','steps'],['scheduler','scheduler'],['model','model']]);
+        for(const k of['steps','cfg']){if(isLink(inputs[k])){const r=resolveNum(inputs[k],0,[k,'value']);inputs[k]=r!=null?r:undefined}}
+        const sv=inputs.seed!==undefined?inputs.seed:inputs.noise_seed;let sr=resolveNum(inputs.seed,0,['seed','noise_seed']);if(sr==null)sr=resolveNum(inputs.noise_seed,0,['seed','noise_seed']);meta.seed=sr!=null?sr:(Array.isArray(sv)?"?":(sv||"?"));meta.steps=inputs.steps||"?";meta.cfg=inputs.cfg||"?";meta.sampler=inputs.sampler_name||ksampler.class_type||"?";if(inputs.scheduler)meta.sampler+=" "+inputs.scheduler;if(inputs.positive)pos=findUpstreamText(inputs.positive);if(inputs.negative)neg=findUpstreamText(inputs.negative);if(inputs.model)meta.model=findUpstreamModel(inputs.model).replace(/\.(safetensors|ckpt)$/,"")}
     
     nodes.forEach(n=>{
         const nodeType = n.class_type || "";
@@ -1259,7 +1299,10 @@ const dimStr=d=>d&&d.w&&d.h?`${d.w}x${d.h}`:null;
 // ===================== VIDEO CONTAINER METADATA =====================
 // Bump when the video parser changes shape - cached video items stamped with an older VMETA get
 // re-read on the next scan (see backfillDim), so improvements land without nuking the whole DB.
-const VMETA=1;
+const VMETA=2;
+// Image counterpart of VMETA: bump when parseComfy/parseMetadata learn a new graph shape. Only
+// items whose cached parse came back empty are re-read (see backfillDim).
+const MV=1;
 // Same idea as VMETA, for the AI side: bump when a model, its quantization or the preprocessing
 // changes, so aiNeeds() re-analyzes stale items without discarding any parsed metadata.
 const AIV=1;
@@ -1281,6 +1324,13 @@ function mp4Boxes(v,s,e,fn){
 }
 
 // Pull tkhd dimensions and the udta/meta tag list out of an already-loaded moov.
+// True when some value is a ComfyUI graph in its own right: UI form (`nodes`) or API form (node
+// objects carrying class_type).
+function keyedIsGraph(o){
+    for(const s of Object.values(o)){let j=null;try{j=JSON.parse(s)}catch(e){continue}
+        if(j&&typeof j==='object'&&!Array.isArray(j)&&(Array.isArray(j.nodes)||Object.values(j).some(n=>n&&typeof n==='object'&&n.class_type)))return true}
+    return false;
+}
 function mp4Moov(v,s,e){
     let dim=null;const keys=[],items=[];
     const walk=(a,b)=>mp4Boxes(v,a,b,(t,ds,de)=>{
@@ -1310,12 +1360,20 @@ function mp4Moov(v,s,e){
     walk(s,e);
     // Resolve each item to a key name: the mdta keys table if present, else the classic iTunes atom.
     const NAMED={'\xA9cmt':'comment','\xA9nam':'title','desc':'description','\xA9des':'description'};
-    let text='';
+    let text='';const keyed={};let nk=0;
     for(const it of items){
-        const k=(keys.length&&it.idx>=1&&it.idx<=keys.length)?keys[it.idx-1]:NAMED[it.cc];
+        const byKey=keys.length&&it.idx>=1&&it.idx<=keys.length;
+        const k=byKey?keys[it.idx-1]:NAMED[it.cc];
         if(!k||!it.val||!it.val.trim())continue;
+        if(byKey){const n=k.replace(/^com\.[^.]+\./,'');if(!(n in keyed)){keyed[n]=it.val;nk++}}
         text+=(text?'\n':'')+it.val;
     }
+    // ComfyUI's core SaveVideo writes `workflow` and `prompt` as separate mdta keys, each holding a raw
+    // graph. Joining them with '\n' lost the key names and produced text no JSON.parse accepts, so
+    // that case is re-wrapped as {key: value} - the shape unwrapMeta/videoChunks already expect.
+    // ONLY when a keyed value is itself a graph: an mdta `comment` holding a VHS wrapper or a WanGP
+    // dict must stay as-is, or it gets wrapped twice and parses as nothing.
+    if(nk&&keyedIsGraph(keyed))text=JSON.stringify(keyed);
     return {text,dim};
 }
 
@@ -1549,15 +1607,23 @@ async function proc(h,p){try{const f=await h.getFile(),vid=RX_VIDEO.test(f.name)
         // Container walk only - readVideoMeta never buffers the file. The old "Video" placeholder
         // stays as the failure path, so an unparseable container is no worse off than before.
         const r=await readVideoMeta(f);
-        if(r&&r.text){const u=unwrapMeta(r.text);m=u.obj?parseSettings(u.obj):parseMetadata(u.text)}
+        const vc=videoChunks(r&&r.text);
+        if(r&&r.text){m=parseGraphs(vc.map(c=>c.json));if(!m){const u=unwrapMeta(r.text);m=u.obj?parseSettings(u.obj):parseMetadata(u.text)}}
         if(!hasMeta(m))m={pos:"",neg:"",meta:{model:"Video",size:(f.size/1e6).toFixed(1)+"MB"},resources:[]};
         dim=dimStr(r&&r.dim);
         // Free: the container walk already produced this text. Only files cached by an earlier build
         // have to be re-read, which is what buildJsonIndex() is for.
-        try{jt=jsonBlob(videoChunks(r&&r.text))}catch(e){}
-    }else{const b=await f.arrayBuffer(),t=await extractText(b);m=parseMetadata(t);dim=dimStr(readDims(b));
-        try{jt=jsonBlob(await readTextChunks(b))}catch(e){}}
-    const i={p,n:f.name,d:f.lastModified,firstSeen:f.lastModified,m,v:vid,dim,jt,jv:JSONV};if(vid)i.vm=VMETA;
+        try{jt=jsonBlob(vc)}catch(e){}
+    }else{const b=await f.arrayBuffer();let ch=[];try{ch=await readTextChunks(b)}catch(e){}
+        // Keyed chunks first: JSON.parse on the `prompt` chunk is exact, where the text sniffing below
+        // brace-matches a blob of every chunk concatenated together.
+        m=parseGraphs(ch.map(c=>c.json));if(!m)m=parseMetadata(await extractText(b));dim=dimStr(readDims(b));
+        try{jt=jsonBlob(ch)}catch(e){}}
+    // MERGE into an existing record, never replace it. backfill re-runs proc() on cached items, and a
+    // fresh object silently dropped emb/faces/pA/pR/fav/sha/firstSeen - in library mode the diff writer
+    // then sent those as `unset`, erasing them from the shared index for every device.
+    const old=cache.get(p);
+    const i=Object.assign(old||{p,firstSeen:f.lastModified},{p,n:f.name,d:f.lastModified,m,v:vid,dim,jt,jv:JSONV,mv:MV});if(vid)i.vm=VMETA;delete i.unindexed;
     cache.set(p,i);dPut(i)}catch{}}
 // Entries cached by an older build have no `dim`. Backfilling reads only the file's first 64KB
 // rather than re-running the full metadata parse.
@@ -1565,6 +1631,10 @@ async function backfillDim(h,p){const it=cache.get(p);
     // Videos cached before this parser existed hold only the "Video" placeholder. Re-run proc() for
     // any whose stamp is behind VMETA, so parser improvements reach old entries without a DB bump.
     if(it&&it.v){if(it.vm!==VMETA)await proc(h,p);return}
+    // Images cached by an older parser are re-read only when their result looks broken (nothing
+    // recovered, or no prompt). A good parse is left alone - re-reading a 20k library to re-confirm
+    // it is the cost this avoids. proc() stamps mv, so each file is retried once per MV.
+    if(it&&it.mv!==MV&&(!hasMeta(it.m)||!((it.m&&it.m.pos)||'').trim())){await proc(h,p);return}
     if(!it||it.dim!==undefined)return;
     try{const f=await h.getFile();it.dim=dimStr(readDims(await f.slice(0,65536).arrayBuffer()));dPut(it)}catch{it.dim=null}}
 
@@ -3629,7 +3699,10 @@ function aiWorker(){
         // The worker reports a model's REAL backend and precision on `prog{phase:'load'}` when it compiles lazily.
         // That is the only trustworthy tier: the init reply predicts one (below) but a CLIP tower can still fall
         // back to a different precision when it actually loads.
-        if(d.t==='prog'){if(d.phase==='load'&&d.tier&&(d.model==='clipVision'||d.model==='clipText')&&aiBackend)aiBackend.tier=d.tier;if(aiProg)aiProg(d);return}
+        if(d.t==='prog'){if(d.phase==='load'&&d.tier&&(d.model==='clipVision'||d.model==='clipText')&&aiBackend)aiBackend.tier=d.tier;
+            const pw=d.id!=null&&aiPend.get(d.id);if(pw&&pw.kick)pw.kick();
+            if((d.phase==='cluster'||d.phase==='merge')&&aiJob&&aiJob.phase==='cluster'){aiJob.cp=d;aiPaintProgress()}
+            if(aiProg)aiProg(d);return}
         if(d.id==null)return;
         const w=aiPend.get(d.id);if(!w)return;
         if(d.t==='err'){aiPend.delete(d.id);w.rej(Object.assign(new Error(d.msg||d.code),{code:d.code}));return}
@@ -3663,8 +3736,10 @@ function aiWorker(){
 function aiSend(msg,timeout,transfer){
     const id=msg.id||('m'+(++aiSeq));msg.id=id;
     return new Promise((res,rej)=>{
-        const to=setTimeout(()=>{aiPend.delete(id);rej(new Error('timed out'))},timeout||60000);
-        aiPend.set(id,{res:v=>{clearTimeout(to);res(v)},rej:e=>{clearTimeout(to);rej(e)}});
+        // An idle limit: `kick` re-arms it whenever the worker reports progress on this id, so a long
+        // job that is still moving (clustering a big library) is never mistaken for a hung one.
+        let to;const arm=()=>{clearTimeout(to);to=setTimeout(()=>{aiPend.delete(id);rej(new Error('timed out'))},timeout||60000)};arm();
+        aiPend.set(id,{res:v=>{clearTimeout(to);res(v)},rej:e=>{clearTimeout(to);rej(e)},kick:arm});
         transfer?aiW.postMessage(msg,transfer):aiW.postMessage(msg);
     });
 }
@@ -3700,7 +3775,7 @@ async function aiAnalyze(){
     if(REMOTE&&!REMOTE.local){showToast('Analysis runs on the host machine. Open this server there to index.','info');return}
     if(aiJob){showToast('Analysis already running.','info');return}
     const todo=[...fReg.keys()].filter(p=>aiNeeds(cache.get(p)));
-    if(!todo.length){showToast('Everything is already indexed.','success');aiPaint();return}
+    if(!todo.length){if(aiUngrouped())return aiRegroup();showToast('Everything is already indexed.','success');aiPaint();return}
     aiJob={cancel:false,done:0,total:todo.length,t0:Date.now()};
     aiPaint();
     try{
@@ -3726,7 +3801,7 @@ async function aiAnalyze(){
             if(aiJob.done%3===0||aiJob.done===todo.length)aiPaintProgress();
         }
         if(buf.length){await aiPinTier();await dPutMany(buf)}
-        if(!aiJob.cancel)await aiCluster();
+        if(!aiJob.cancel){aiJob.phase='cluster';aiPaintProgress();await aiCluster()}
     }catch(e){showToast('Analysis failed: '+esc(String(e.message||e)),'error')}
     const n=aiJob.done,cancelled=aiJob.cancel,refused=aiJob.refused;
     aiJob=null;aiInvalidateMat();aiPaint();
@@ -3786,21 +3861,70 @@ async function aiCluster(){
     // minN:2 - the worker defaults to 3, which is too strict for a personal library: someone who
     // appears in exactly two photos would be dropped into noise and never show up in People at all.
     // Singletons still go to noise, otherwise every one-off false positive becomes a "person".
+    // Clustering is O(faces x clusters), ~4 min for a 20k-image library. The timeout is an idle limit
+    // (aiSend re-arms it on every prog the worker posts), not a cap on the whole job - the old fixed
+    // 180s killed every large run, and the library was left with faces but no people at all.
     const r=await aiSend({t:'cluster',embs:{v:V,s:Float32Array.from(scales),key:keys},ths:{assign:.50,merge:.55,minN:2}},180000);
-    const byKey=new Map();keys.forEach((k,i)=>byKey.set(k,r.assign[i]));
+    aiMeta=aiMeta||{p:'__ai__'};
+    const idOf=aiStableIds(r.clusters||[],aiMeta.clusters||[]);
+    const byKey=new Map();keys.forEach((k,i)=>byKey.set(k,r.assign[i]>=0?idOf.get(r.assign[i]):-1));
     const touched=new Set();
     for(const[k,c]of byKey){const[p,i]=k.split('#');const v=cache.get(p);
         if(v&&v.faces&&v.faces[+i]){v.faces[+i].c=c;touched.add(p)}}
     await dPutMany([...touched].map(p=>cache.get(p)));
-    aiMeta=aiMeta||{p:'__ai__'};
     aiMeta.v=AIV;aiMeta.lastRun=Date.now();aiMeta.backend=aiBackend;
     const old=new Map((aiMeta.clusters||[]).map(c=>[c.id,c]));
     // Hand-made people are never emitted by the clusterer, so a plain reassignment of this array
     // would delete them - and with them every pA tag pointing at one. Carry them across verbatim.
     const man=(aiMeta.clusters||[]).filter(c=>c.manual);
-    aiMeta.clusters=(r.clusters||[]).map(c=>({...c,name:(old.get(c.id)||{}).name||'',hidden:(old.get(c.id)||{}).hidden||false})).concat(man);
+    const fresh=(r.clusters||[]).map(c=>{const id=idOf.get(c.id),o=old.get(id)||{};return{...c,id,name:o.name||'',hidden:o.hidden||false}});
+    // A named/hidden person the new run found no match for keeps its card (0 photos) instead of its
+    // name vanishing - same "zero members is not gone" rule as renderFaces. So does one a hand tag
+    // still points at.
+    const have=new Set(fresh.map(c=>c.id)),pAref=aiRefIds('pA');
+    const kept=(aiMeta.clusters||[]).filter(c=>!c.manual&&!have.has(c.id)&&((c.name||'').trim()||c.hidden||pAref.has(c.id))).map(c=>({...c,n:0}));
+    aiMeta.clusters=fresh.concat(kept,man);
     AIC=new Map(aiMeta.clusters.map(c=>[c.id,c.name||'']));
     await dPut(aiMeta);
+}
+// Every person id a pA/pR entry still points at.
+function aiRefIds(which){const s=new Set();for(const v of cache.values())if(v)for(const k of(which?[which]:['pA','pR']))for(const c of(v[k]||[]))s.add(c);return s}
+// The worker numbers clusters 0..n-1 by discovery order, which shifts whenever a face is added: one
+// former singleton gaining a match renumbers everything after it. Names (AIC), hidden flags and pA/pR
+// are all keyed by id, so before this every re-cluster silently moved "Rob" onto someone else.
+// Each new cluster inherits the id of the old one whose centroid it matches (one-to-one, best first);
+// the rest take their own worker id if nothing claims it, else the lowest free id. Ids that a
+// name, a hide or a pA/pR entry depends on are never handed to an unrelated cluster.
+// Only old clusters carrying user state are matched: that's a few hundred at most, where all of
+// them would be 10k x 10k dot products on the main thread.
+function aiStableIds(nc,oc){
+    const ref=aiRefIds(),imp=oc.filter(c=>!c.manual&&c.cent&&c.cent.length===512&&((c.name||'').trim()||c.hidden||ref.has(c.id)));
+    const nrm=a=>{let s=0;for(let j=0;j<512;j++)s+=a[j]*a[j];return Math.sqrt(s)||1};
+    const pairs=[];
+    for(const o of imp){const A=o.cent,na=nrm(A);
+        for(const c of nc){if(!c.cent||c.cent.length!==512)continue;const B=c.cent;let d=0;for(let j=0;j<512;j++)d+=A[j]*B[j];
+            d/=na*nrm(B);if(d>=.55)pairs.push([d,c.id,o.id])}}
+    pairs.sort((a,b)=>b[0]-a[0]);
+    const idOf=new Map(),taken=new Set();
+    for(const[,n,o]of pairs)if(!idOf.has(n)&&!taken.has(o)){idOf.set(n,o);taken.add(o)}
+    const res=new Set([...taken,...ref,...oc.map(c=>c.id)]);   // conservative: no old id is recycled
+    for(const c of nc){if(idOf.has(c.id))continue;
+        let id=c.id;if(res.has(id)||id>=MANUAL_ID0){id=0;while(res.has(id))id++}
+        idOf.set(c.id,id);res.add(id)}
+    return idOf;
+}
+// Faces analyzed but never grouped - an Analyze whose cluster step died (the old 180s timeout), or
+// a run cancelled after its last batch. "Everything is already indexed" used to return straight past
+// these, so such a library could never get its People view back.
+function aiUngrouped(){for(const p of fReg.keys()){const v=cache.get(p);if(v&&v.faces)for(const f of v.faces)if(f.emb&&f.c===undefined)return true}return false}
+async function aiRegroup(){
+    if(!aiOK()){toggleAI();return}
+    if(REMOTE&&!REMOTE.local){showToast('Grouping runs on the host machine.','info');return}
+    if(aiJob){showToast('Analysis already running.','info');return}
+    aiJob={cancel:false,done:0,total:0,t0:Date.now(),phase:'cluster'};aiPaint();
+    try{await aiWorker();await aiCluster();showToast(`Grouped faces into ${(aiMeta&&aiMeta.clusters||[]).filter(c=>!c.hidden).length} people.`,'success')}
+    catch(e){showToast('Grouping failed: '+esc(String(e.message||e)),'error')}
+    aiJob=null;aiPaint();if(vMode==='faces')rend();
 }
 
 // ---- panel ---------------------------------------------------------------------------------
@@ -3822,6 +3946,12 @@ function aiSetModelRow(d){
 function aiPaintProgress(){
     const t=document.getElementById('aiProgTxt'),f=document.getElementById('aiProgFill');
     if(!aiJob)return;
+    if(aiJob.phase==='cluster'){
+        const q=aiJob.cp,pc=q&&q.total?Math.round(q.done/q.total*100):0;
+        if(t)t.textContent=!q?'Grouping faces into people…':`Grouping faces into people — ${q.phase==='merge'?'merging':'assigning'} ${q.done.toLocaleString()} / ${q.total.toLocaleString()}`;
+        if(f)f.style.width=(q?(q.phase==='merge'?50+pc/2:pc/2):2)+'%';
+        return;
+    }
     const{done,total,t0}=aiJob,pct=total?Math.round(done/total*100):0;
     // Models take ~17s to compile on first run and nothing else happens meanwhile. Without saying
     // so, a 0% bar reading "0 / N" for twenty seconds looks like the job has hung.
@@ -3870,6 +4000,7 @@ function aiPaint(){
         ${aiJob?`<button class="dup-btn" onclick="aiCancelJob()">Cancel</button>`
                :`<button class="dup-btn primary" onclick="aiAnalyze()">Analyze ${c.todo.toLocaleString()} items</button>`}
         <button class="dup-btn" onclick="hideAI();setView('faces')">Review people →</button>
+        ${aiJob||(REMOTE&&!REMOTE.local)?'':`<button class="dup-btn${aiUngrouped()?' primary':''}" onclick="aiRegroup()" title="Re-run face grouping over everything analyzed so far. Names, hides and hand tags are kept.">Re-group faces</button>`}
         ${aiJob?'':`<button class="dup-btn" onclick="aiExportIndex()" title="Save this library's AI index to a file">Export index</button>
         <button class="dup-btn" onclick="aiImportIndex()" title="Load an index exported from another machine with the same library">Import index</button>`}
         <button class="dup-btn" onclick="aiClearData()">Clear AI data</button>

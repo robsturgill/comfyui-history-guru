@@ -160,11 +160,58 @@ describe('survives re-analysis', () => {
             };
         }`);
         assert.strictEqual(r.reassigned, 9, 'stub did not reach the byKey loop — test would be vacuous');
-        assert.deepStrictEqual(r.ids, [9, 1000000]);
+        // 3 has no centroid, so it can't be matched to 9 - but it is NAMED, so it keeps a 0-photo card
+        // rather than "Detected Rob" vanishing (aiCluster's `kept`).
+        assert.deepStrictEqual(r.ids, [3, 9, 1000000]);
         assert.strictEqual(r.manualStillThere, true, 'hand-made person deleted by the cluster rebuild');
         assert.strictEqual(r.manualName, 'Hand-made Ann');
         assert.deepStrictEqual(r.v1People, [9, 1000000], 'hand tag lost from a re-clustered image');
         assert.deepStrictEqual(r.v2People, [1000000], 'hand tag lost from an image with no detections');
+    });
+});
+
+describe('cluster ids are stable across re-clustering', () => {
+    // The worker numbers clusters 0..n-1 by discovery order, so adding photos renumbers them. Names,
+    // hides and pA/pR are keyed by id: without aiStableIds a re-cluster moves "Rob" onto a stranger.
+    const vec = seed => { const a = new Int8Array(512); for (let j = 0; j < 512; j++) a[j] = ((j * seed) % 13) - 6; return a; };
+    test('a named person keeps its id and name when the worker renumbers it', async () => {
+        const r = await run(`async () => {
+            const vec = ${vec.toString()};
+            const R = vec(3), S = vec(7);
+            const f = e => [{box:[0,0,1,1], score:1, emb:e, embS:0.1}];
+            const a = mk('a.png', f(R)), b = mk('b.png', f(R)), c = mk('c.png', f(S)), d = mk('d.png', f(S));
+            a.faces[0].c = b.faces[0].c = 0; c.faces[0].c = d.faces[0].c = 1;
+            aiMeta.clusters = [{id:0, name:'Rob', cent:R, centS:0.1, n:2}, {id:1, name:'', cent:S, centS:0.1, n:2}];
+            AIC = new Map([[0,'Rob'],[1,'']]);
+            applyPersonEdit(c, 1, 'rm');            // a pR on the unnamed cluster: its id is now load-bearing
+            // Worker swaps the numbering: Rob's faces come back as 1, the other person's as 0.
+            const realSend = window.aiSend;
+            window.aiSend = async () => ({assign:[1,1,0,0], clusters:[{id:0, n:2, cent:S, centS:0.1}, {id:1, n:2, cent:R, centS:0.1}]});
+            try { await aiCluster(); } finally { window.aiSend = realSend; }
+            return {aC:a.faces[0].c, cC:c.faces[0].c, rob:AIC.get(a.faces[0].c), ids:aiMeta.clusters.map(x=>x.id).sort(), cPeople:peopleOf(c)};
+        }`);
+        assert.strictEqual(r.rob, 'Rob', 'name followed the old id onto a different person');
+        assert.strictEqual(r.aC, 0);
+        assert.strictEqual(r.cC, 1, 'the pR-referenced cluster was renumbered, so the suppression points at nothing');
+        assert.deepStrictEqual(r.cPeople, [], 'suppression lost across the re-cluster');
+        assert.deepStrictEqual(r.ids, [0, 1]);
+    });
+    test('a new cluster never takes an id a name or pR depends on', async () => {
+        const r = await run(`async () => {
+            const vec = ${vec.toString()};
+            const R = vec(3), T = vec(11);
+            const f = e => [{box:[0,0,1,1], score:1, emb:e, embS:0.1}];
+            mk('x.png', f(T)); mk('y.png', f(T));
+            mk('z.png', [], null, [4]);                       // pR on an id with no cluster left
+            aiMeta.clusters = [{id:0, name:'Rob', cent:R, centS:0.1, n:2}];
+            const realSend = window.aiSend;
+            window.aiSend = async () => ({assign:[0,0], clusters:[{id:0, n:2, cent:T, centS:0.1}]});
+            try { await aiCluster(); } finally { window.aiSend = realSend; }
+            const nu = aiMeta.clusters.find(c => !c.name);
+            return {nuId:nu && nu.id, rob:aiMeta.clusters.find(c => c.name==='Rob')};
+        }`);
+        assert.ok(r.nuId !== 0 && r.nuId !== 4, 'new stranger got id ' + r.nuId + ', inheriting a name or a suppression');
+        assert.ok(r.rob && r.rob.id === 0 && r.rob.n === 0, 'unmatched named person must keep a 0-photo card');
     });
 });
 
