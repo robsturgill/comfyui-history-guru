@@ -595,6 +595,10 @@ Inert unless `remoteBoot()` (last line of the script) gets `{library:true}` from
 - **Favorites are `fav:true` on the record** in library mode (`rFavSave`), rebuilt into the `favorites` Set at
   the end of `rLoadIndex`. Not a `__fav__` blob: `dAll` routes `_` keys to `aiLoadMeta`, and one shared Set is
   last-write-wins. A move carries the star in both modes.
+- **AI in library mode: see `ai/CONTRACT.md` §7c.** `aiCanRead()` (not `aiOK()`) gates `like:` and People, which
+  need no inference. The embedding tier is pinned in `__ai__.tier` before the first save (`aiPinTier`), and
+  `sem:` additionally needs this device's tier to equal the index's. `aiBackend.tier` was never populated before
+  this work: read it only after the CLIP towers have compiled, or treat it as a prediction.
 - **"Open Folder" is hidden** (`.no-remote`) and `initFileSystem()` returns early. A local `rH` over
   server-backed wrappers would write foreign paths into the shared index.
 - **The `db={...}` stub recipe above does not apply here**: in library mode there is no `db`, writes go to

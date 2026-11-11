@@ -895,6 +895,7 @@ async function remoteBoot(){
     if(!c||!c.library)return;
     REMOTE={name:c.name||'Library',local:!!c.local,writable:!!c.writable,tier:c.tier||null,tree:null,unindexed:0};
     document.body.classList.add('remote-lib');
+    const pbtn=document.getElementById('peopleBtn');if(pbtn)pbtn.classList.remove('ai-off');   // People needs no inference here
     document.title='History Guru — '+REMOTE.name;
     rH=new RDir('');
     document.getElementById('wel').classList.add('hidden');
@@ -2188,7 +2189,7 @@ function syncSelUI(){
     if(db){db.disabled=!n;db.textContent=`Delete ${n}`}
     // Stays disabled on file://, where there is no AI data to tag against - same as the dimmed 🧠.
     const pb=document.getElementById('selPeopleBtn');
-    if(pb)pb.disabled=!n||!aiOK();
+    if(pb)pb.disabled=!n||!aiCanRead();
 }
 function clearSelection(){selectedItems.clear();selectedIndex=-1;syncSelUI()}
 function selectAllListed(){cFiles.forEach(f=>selectedItems.add(f.p));syncSelUI()}
@@ -2454,7 +2455,7 @@ function popPeople(mt){
     if(!wrap||!box)return;
     // No !ids.length bail any more - the section has to render empty so an untagged image can be
     // tagged. It stays gated on aiOK(), like every other AI affordance.
-    if(!aiOK()){wrap.style.display='none';box.innerHTML='';return}
+    if(!aiCanRead()){wrap.style.display='none';box.innerHTML='';return}
     const ids=peopleOf(mt);
     box.innerHTML=ids.map(c=>`<span class="chip person-chip" onclick="peopleFromDetail(${c})" title="Show every photo of this person">${esc(AIC.get(c)||('person-'+c))}<span class="chip-badge">id ${c}</span><span class="chip-x" onclick="event.stopPropagation();personFromDetail('rm',${c})" title="Remove this person from this image">✕</span></span>`).join('')
         +`<span class="chip chip-add" onclick="personFromDetail('add')" title="Tag someone in this image">＋ add person</span>`;
@@ -2636,6 +2637,7 @@ const jtNeeds=v=>!!v&&v.jv!==JSONV;
 // is already this way round: the duplicate scan is a button and AI analysis is an opt-in job.
 let jtJob=null;
 async function buildJsonIndex(){
+    if(REMOTE&&!REMOTE.local){showToast('Building the JSON index re-reads every file, so it runs on the host machine.','info');return}
     if(jtJob){showToast('Already indexing.','info');return}
     if(!fReg.size){showToast('Open your image folder first.','info');return}
     const todo=[];for(const[p,h]of fReg)if(jtNeeds(cache.get(p)))todo.push([p,h]);
@@ -3510,10 +3512,30 @@ function aiCoverage(){
         if(!v)todo++;else if(v.aiSkip)skip++;else if(v.emb&&v.ai===AIV)done++;else todo++}
     return{done,skip,todo,total:fReg.size};
 }
+// ---- library mode: what a client may do with AI data ---------------------------------------------
+// like: reads vectors that are already stored and the People view only edits records, so in library mode
+// they work on ANY page, including plain-http LAN where the browser blocks inference. Only sem: embeds
+// text, and it does that on THIS device, so it needs a secure context AND the same precision tier the
+// index was built at (an int8 phone ranking against an fp16 index is a different embedding space: it
+// returns confident nonsense rather than failing).
+const aiCanRead=()=>aiOK()||!!REMOTE;
+const aiIdxTier=()=>REMOTE?((aiMeta&&(aiMeta.tier||(aiMeta.backend&&aiMeta.backend.tier)))||null):null;
+let aiSemWarn='';
+function aiSemNote(msg){if(aiSemWarn!==msg){aiSemWarn=msg;showToast(msg,'info')}}
+function aiTierMismatch(){
+    const idx=aiIdxTier(),mine=aiBackend&&aiBackend.tier;
+    return idx&&mine&&mine!==idx?`This library is indexed at ${idx} precision but this device runs ${mine}, so semantic search would rank against a different embedding space. Use a device with the same backend as the host.`:null;
+}
+async function aiSemBlocked(){
+    if(!REMOTE)return null;
+    if(!aiOK())return 'Semantic search needs a secure page. Open the server over https (--tls-cert/--tls-key) or on the host machine. like: and People still work here.';
+    if(aiIdxTier()){try{await aiWorker()}catch(e){return null}}   // aiEmbedText reports its own failure
+    return aiTierMismatch();
+}
 // Embeds each sem:/like: term once. `like:` needs no inference at all - the query vector is the
 // item's own stored embedding, so "find similar" is instant.
 async function aiQueryVecs(sems){
-    if(!aiOK()||!sems||!sems.length)return null;
+    if(!aiCanRead()||!sems||!sems.length)return null;
     aiBuildMat();
     const out=[];
     for(const s of sems){
@@ -3525,8 +3547,12 @@ async function aiQueryVecs(sems){
             const v=cache.get(hit);
             out.push({kind:'like',neg:s.neg,emb:v.emb,embS:v.embS,self:hit});
         }else{
+            const why=await aiSemBlocked();
+            if(why){aiSemNote(why);continue}
             let r=null;
             try{r=await aiEmbedText(s.q)}catch(e){console.warn('query embed failed',e)}
+            // The tower's real precision is only known once it has compiled, i.e. now.
+            const why2=aiTierMismatch();if(why2){aiSemNote(why2);continue}
             if(!r)continue;
             out.push({kind:'sem',neg:s.neg,emb:r.emb,embS:r.embS});
         }
@@ -3600,7 +3626,10 @@ function aiWorker(){
         // pending map - routing it through there hangs init forever. Handle it before that lookup.
         if(d.t==='ready'){if(aiInitDone){aiInitDone.res(d);aiInitDone=null}return}
         if(d.t==='prog'&&d.phase==='load'){aiSetModelRow(d);aiPaintProgress();return}
-        if(d.t==='prog'){if(aiProg)aiProg(d);return}
+        // The worker reports a model's REAL backend and precision on `prog{phase:'load'}` when it compiles lazily.
+        // That is the only trustworthy tier: the init reply predicts one (below) but a CLIP tower can still fall
+        // back to a different precision when it actually loads.
+        if(d.t==='prog'){if(d.phase==='load'&&d.tier&&(d.model==='clipVision'||d.model==='clipText')&&aiBackend)aiBackend.tier=d.tier;if(aiProg)aiProg(d);return}
         if(d.id==null)return;
         const w=aiPend.get(d.id);if(!w)return;
         if(d.t==='err'){aiPend.delete(d.id);w.rej(Object.assign(new Error(d.msg||d.code),{code:d.code}));return}
@@ -3622,7 +3651,12 @@ function aiWorker(){
         });
         aiW.postMessage({t:'init',id:'init',manifest:man,prefer:localStorage.getItem('guru-ai-backend')||'auto'});
         const r=await wait;
-        aiBackend=r.backend;aiPaint();return r;
+        aiBackend=r.backend;
+        // READY.backend has no `tier` (it describes the faceDet probe). Seed the CLIP tier the worker predicts, so
+        // export/import and the library-mode guard have something before the first embedding; prog() overwrites it
+        // with the real one.
+        const cv=r.models&&r.models.clipVision;if(cv&&cv.tier&&!aiBackend.tier)aiBackend.tier=cv.tier;
+        aiPaint();return r;
     })();
     return aiReady;
 }
@@ -3649,8 +3683,21 @@ async function aiEmbedText(q){
 // ---- the batch job -------------------------------------------------------------------------
 // Opt-in, cancellable, and resumable for free: every result is written as it completes and
 // aiNeeds() re-derives the remaining set on restart, so there is no progress bookkeeping to keep.
+const aiTierRefusal=()=>`this library is indexed at ${aiIdxTier()} but this machine runs ${aiBackend&&aiBackend.tier}; mixing them corrupts search. Use Clear AI data first to start over at ${aiBackend&&aiBackend.tier}`;
+// Library mode: the precision tier is recorded in the shared index BEFORE the first embedding is saved. aiMeta.backend
+// is only written by aiCluster, which returns early with <2 faces, so a first run would record nothing and every later
+// check would compare against null (and a null tier disables the guard rather than tripping it).
+async function aiPinTier(){
+    if(!REMOTE)return;
+    const mine=aiBackend&&aiBackend.tier;
+    if(!mine){aiJob.refused=1;throw new Error('the model precision could not be verified, so nothing was saved')}
+    if(aiTierMismatch()){aiJob.refused=1;throw new Error(aiTierRefusal())}
+    if(!aiIdxTier()){aiMeta=aiMeta||{p:'__ai__',v:AIV,clusters:[]};aiMeta.tier=mine;if(!(await dPut(aiMeta)))throw new Error('could not record the model precision on the server')}
+}
 async function aiAnalyze(){
     if(!aiOK()){toggleAI();return}
+    // The GPU is on the host and every vector is written into the one shared index, so only the host analyzes.
+    if(REMOTE&&!REMOTE.local){showToast('Analysis runs on the host machine. Open this server there to index.','info');return}
     if(aiJob){showToast('Analysis already running.','info');return}
     const todo=[...fReg.keys()].filter(p=>aiNeeds(cache.get(p)));
     if(!todo.length){showToast('Everything is already indexed.','success');aiPaint();return}
@@ -3658,6 +3705,9 @@ async function aiAnalyze(){
     aiPaint();
     try{
         await aiWorker();
+        // Cheap early refusal on the tier the worker predicts. The authoritative check is aiPinTier(), below, once a
+        // CLIP tower has really compiled.
+        if(REMOTE&&aiTierMismatch()){aiJob.refused=1;throw new Error(aiTierRefusal())}
         const buf=[];
         for(const p of todo){
             if(aiJob.cancel)break;
@@ -3671,15 +3721,16 @@ async function aiAnalyze(){
                 it.ai=AIV;it.aiSkip=(e&&e.code==='nodecode')||/decode|video/i.test(String(e.message))?'nodecode':'error';
             }
             cache.set(p,it);buf.push(it);
-            if(buf.length>=100){await dPutMany(buf.splice(0,buf.length))}
+            if(buf.length>=100){await aiPinTier();await dPutMany(buf.splice(0,buf.length))}
             aiJob.done++;
             if(aiJob.done%3===0||aiJob.done===todo.length)aiPaintProgress();
         }
-        if(buf.length)await dPutMany(buf);
+        if(buf.length){await aiPinTier();await dPutMany(buf)}
         if(!aiJob.cancel)await aiCluster();
     }catch(e){showToast('Analysis failed: '+esc(String(e.message||e)),'error')}
-    const n=aiJob.done,cancelled=aiJob.cancel;
+    const n=aiJob.done,cancelled=aiJob.cancel,refused=aiJob.refused;
     aiJob=null;aiInvalidateMat();aiPaint();
+    if(refused)return;
     showToast(cancelled?`Analysis cancelled after ${n} items.`:`Analyzed ${n} items.`,cancelled?'info':'success');
 }
 function aiCancelJob(){if(aiJob){aiJob.cancel=true;try{aiW.postMessage({t:'cancel'})}catch(e){}}}
@@ -3786,6 +3837,14 @@ function aiPaintProgress(){
 }
 function aiPaint(){
     const el=document.getElementById('aiBody');if(!el)return;
+    if(!aiOK()&&REMOTE){
+        el.innerHTML=`<div class="ai-warn-box"><b>On-device AI can't run on this page.</b>
+          <p>This is a plain <code>http://</code> address, which the browser does not treat as secure, so it blocks WebNN, WebGPU
+          and Web Workers. Browsing, <code>like:</code> (find similar) and the People view still work from the shared index.</p>
+          <p>For semantic search, open the server over <code>https</code> (start it with <code>--tls-cert</code> and <code>--tls-key</code>)
+          or use the host machine.</p></div>`;
+        return;
+    }
     if(!aiOK()){
         el.innerHTML=`<div class="ai-warn-box"><b>AI search needs a secure context.</b>
           <p>Chrome blocks WebNN, WebGPU and Web Workers on <code>file://</code>, so on-device AI cannot run here.
@@ -3803,6 +3862,7 @@ function aiPaint(){
         <div><span class="ai-dim">unsupported</span><div>${c.skip.toLocaleString()}</div></div>
         <div><span class="ai-dim">people</span><div>${nCl}</div></div>
       </div>
+      ${REMOTE&&!REMOTE.local?`<p class="ai-dim" style="margin:8px 0">Shared library: analysis runs on the host machine. Here you can search, and use <code>sem:</code> only if this device runs the same precision${aiIdxTier()?' ('+esc(aiIdxTier())+')':''} as the index.</p>`:''}
       <div id="aiModels" class="ai-models"></div>
       ${aiJob?`<div class="dup-track"><div id="aiProgFill" class="dup-fill"></div></div>
                <div id="aiProgTxt" class="ai-dim" style="margin-top:6px"></div>`:''}
@@ -3821,7 +3881,9 @@ function aiPaint(){
     if(aiJob)aiPaintProgress();
 }
 async function aiClearData(){
-    if(!confirm('Remove all AI embeddings, faces, people names and manual person tags? The images themselves are untouched.'))return;
+    if(REMOTE&&!REMOTE.local){showToast('Clearing AI data affects every device on this library, so it can only be done on the host machine.','info');return}
+    if(!confirm(REMOTE?'Remove all AI embeddings, faces, people names and manual person tags for EVERY device using this library? The images themselves are untouched.'
+        :'Remove all AI embeddings, faces, people names and manual person tags? The images themselves are untouched.'))return;
     const upd=[];
     // pA/pR are in the guard as well as the delete list: an image tagged by hand but never analyzed
     // has no emb, no faces and no `ai`, and would otherwise be skipped with its tag left behind.
@@ -4094,7 +4156,7 @@ function aiClusterMembers(){
     return m;
 }
 function renderFaces(c){
-    if(!aiOK()){c.innerHTML='<div class="json-empty">AI features need the local launcher — run <code>node serve.mjs</code>.</div>';return}
+    if(!aiCanRead()){c.innerHTML='<div class="json-empty">AI features need the local launcher — run <code>node serve.mjs</code>.</div>';return}
     const mem=aiClusterMembers();
     // Zero members is not the same as gone. A manual person created a moment ago has none yet, and a
     // NAMED cluster the user has removed from every photo would otherwise lose its card - and with it
@@ -4205,7 +4267,7 @@ async function aiRenameCluster(id,name){
 // "start over". The 👥 header button is always there, and the faces view keeps its own state -
 // nothing is recomputed, so returning is instant.
 function showPeople(){
-    if(!aiOK()){showToast('People need the local launcher — run node serve.mjs.','info');return}
+    if(!aiCanRead()){showToast('People need the local launcher — run node serve.mjs.','info');return}
     setView('faces');
 }
 // Queries by id, never by name. Nothing stops two people being called "Rob" - the rename box never
@@ -4319,7 +4381,7 @@ function aiPickGo(){
 // Bulk edit over selectedItems. Deliberately does NOT call rend() - rend() calls clearURLs(), which
 // revokes the thumbnail object URLs and blanks every image. Same rule as syncSelUI/syncDupGroupUI.
 async function aiBulkPeople(){
-    if(!aiOK()){showToast('People need the local launcher — run node serve.mjs.','info');return}
+    if(!aiCanRead()){showToast('People need the local launcher — run node serve.mjs.','info');return}
     if(!selectedItems.size)return;
     const r=await aiPickPerson({title:`Edit people on ${selectedItems.size} image${selectedItems.size===1?'':'s'}`,actions:true,confirmLabel:'Apply'});
     if(!r)return;

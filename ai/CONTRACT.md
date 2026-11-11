@@ -496,6 +496,32 @@ await fetch('ai/models/manifest.json', {cache:'reload'});
 
 The worker's own weight cache key is `guru-ai-w1`. Bump it, or clear it, whenever weights change.
 
+## 7c. Library mode (`serve.mjs --dir`): one index, many devices
+
+The index lives on the server and every device reads it, so the §7a tier rule stops being an import-time
+check and becomes a standing invariant. Nothing here changes the worker protocol.
+
+- **The tier is pinned to the index.** `aiPinTier()` writes `aiMeta.tier` (`__ai__.tier`, advertised by
+  `/api/config`) **before the first embedding is saved**. It cannot rely on `aiMeta.backend`: that is only
+  written by `aiCluster()`, which returns early with fewer than two faces, so a first run would record nothing
+  and every later check would compare against `null`, which disables the guard instead of tripping it.
+  Analyze refuses on a mismatch, with nothing saved. Clearing AI data (`__ai__` deleted) is the one way to
+  start over at a different tier.
+- **`sem:` is gated on the same tier, on the querying device.** The *client* embeds the query text, so an int8
+  phone ranking against an fp16 index lands in a different embedding space and returns confident nonsense
+  rather than failing. `aiSemBlocked()` checks before embedding; `aiTierMismatch()` checks again after, because
+  the real tier is only known once the tower has compiled. This means a device that cannot run fp16 (anything
+  on WASM, see §3a) can **never** use `sem:` on an fp16 index. HTTPS fixes the secure-context half only.
+- **`like:` and the People view need no inference**, so they are gated by `aiCanRead()` (`aiOK() || REMOTE`),
+  not `aiOK()`. On a plain-`http://` LAN page they work; only `sem:` and Analyze are off.
+- **Only the host analyzes** (`REMOTE.local`): the GPU is there and every vector lands in the shared index.
+  *Clear AI data* and *Build JSON index* are host-only for the same reason.
+- **`aiBackend.tier` was never populated before this**, contrary to what §7a assumes: the worker's `ready`
+  reply describes the `faceDet` probe (`{name,device,ms,partitioned}`) and carries no `tier`, so awaiting
+  `aiWorker()` did not make it known, and exports have been writing `tier:null`. It is now seeded from
+  `ready.models.clipVision.tier` (a *prediction*, since the towers compile lazily) and overwritten by the real
+  value from the `prog{phase:'load'}` message for `clipVision`/`clipText` when they compile.
+
 ## 8. Invariants that will bite
 
 - **Selection changes must not call `rend()`** — `rend()` calls `clearURLs()`, which revokes object
