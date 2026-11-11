@@ -61,3 +61,7 @@ ai/diagnostics/
 
 # Playwright MCP test artifacts
 .playwright-mcp/
+
+# LAN library server: the password lives in the config, and data/ is the shared index
+guru.config.json
+data/

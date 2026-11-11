@@ -528,6 +528,13 @@ Chrome gates WebNN, WebGPU **and Web Workers** behind a secure context, and `fil
 node serve.mjs        # then open http://127.0.0.1:8787
 ```
 
+`serve.mjs` also takes LAN/password/TLS options (flags, `GURU_*` env, or `guru.config.json`; see
+Readme "Server options"). Invariants: a non-loopback bind and `--dir` both **refuse to start
+without a password**; every request is Basic-authed and Host-checked (DNS rebinding); static files
+are an **allowlist** (app, `ai-check.html`, `ai/**`), never "everything under ROOT", because the
+config file and `data/` sit in the same tree. `node --test serve.test.mjs` covers it. Both
+`createApp(cfg)` and `loadConfig()` are exported so tests need no child process.
+
 Everything is behind `aiOK()`. Opened by double-click the app behaves **exactly as before**; the only
 delta is a dimmed 🧠 button. `localStorage['guru-ai']='off'` is a hard kill switch.
 

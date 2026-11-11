@@ -131,6 +131,31 @@ Opened the old way, the app behaves exactly as before, with the 🧠 button dimm
 
 ---
 
+## 🌐 Server Options (`serve.mjs`)
+
+`node serve.mjs` is still loopback-only with no password, exactly as before. Options, as flags or in
+`guru.config.json` (git-ignored; precedence is flags > `GURU_*` environment > config file > defaults):
+
+| Flag | Config key | Env | Default |
+|---|---|---|---|
+| `--host <addr>` / `--lan` (= `0.0.0.0`) | `host` | `GURU_HOST` | `127.0.0.1` |
+| `--port <n>` | `port` | `GURU_PORT` | `8787` (fixed, never auto-incremented) |
+| `--password <pw>` | `password`, or `passwordHash` | `GURU_PASSWORD` | none |
+| `--tls-cert <pem>` `--tls-key <pem>` | `tls: {cert, key}` | `GURU_TLS_CERT` `GURU_TLS_KEY` | none (http) |
+| `--allow-host <name>` | `allowedHosts` | | none |
+| `--data <path>` | `data` | `GURU_DATA` | `./data` |
+| `--dir <path>` | `dir` | `GURU_DIR` | none (library hosting, see below) |
+
+*   **A password is mandatory off-loopback.** `--lan` or any non-loopback `--host` refuses to start without one. HTTP Basic auth, any username, one shared password, applied to every request.
+*   **Keep the password out of `ps` and the repo.** Prefer `GURU_PASSWORD`, or `node serve.mjs --hash-password` (reads stdin) and put the resulting `passwordHash` in the config file.
+*   **Plain HTTP puts the password on the wire in cleartext**, and browsers only run the on-device AI on a secure context. `--tls-cert/--tls-key` fixes both; a locally trusted certificate (e.g. mkcert) avoids the per-device warning.
+*   **`Host` is checked** (IP literals, `localhost` and this machine's hostname pass; add a DNS name with `--allow-host`), which blocks DNS-rebinding from a hostile web page.
+*   **Only the app and `ai/` are served.** The config file, `data/`, `.git` and `samples/` are not downloadable.
+
+> Hosting a library for other devices (`--dir`) is being built in stages; until it lands, `--dir` is parsed and validated (it requires a password) but does nothing yet.
+
+---
+
 ## ⌨️ Keyboard Shortcuts
 *   `Arrow Keys` - Navigate images in detail view
 *   `Esc` - Blur active input / Close overlays / Exit detail view

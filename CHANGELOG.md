@@ -5,6 +5,8 @@ All notable changes to the Guru Manager project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`serve.mjs` server options: LAN bind, password, TLS, config file.** `--lan`/`--host`, `--password` (or `passwordHash`), `--tls-cert/--tls-key`, `--port`, `--data`, `--allow-host`, all also available as `GURU_*` environment variables or a git-ignored `guru.config.json`. A non-loopback bind refuses to start without a password; HTTP Basic auth covers every request; the `Host` header is checked against DNS rebinding. First step towards hosting a library for other devices on the LAN.
+- `node --test serve.test.mjs` covers config precedence, the startup guards, auth, the Host check and the static allowlist.
 - **Tag people by hand, on a selection or one image at a time.** The ☑ selection bar gains **👤 People…**, which adds, removes or replaces a person across everything selected; the inspector's people chips gain a ✕ to remove and a ＋ to tag. Both save immediately.
 - **Pick people by name, not by id.** One picker serves the inspector, the bulk editor and *Merge…* — a list of named people first, then unnamed clusters with their photo counts. Typing a raw id still works, for clusters nobody has named yet. *Merge…* no longer opens a `prompt()` asking the user to read an id off a card and type it back.
 - **People who were never detected.** **＋ New person** in the People view, and in the picker, creates someone the face clusterer never found, so a photo where no face was detected can still be attributed.
@@ -21,6 +23,7 @@ All notable changes to the Guru Manager project will be documented in this file.
 - The picker's action radio resets to **Add** on every open, instead of inheriting *Remove* from a previous use.
 
 ### Changed
+- **`serve.mjs` now serves an allowlist**, not everything under its folder: the app, `ai-check.html` and `ai/`. `CLAUDE.md`, `serve.mjs`, `.git` and similar are no longer fetchable. Dotfile paths are refused.
 - Index export format `PORTV` is now **2**, carrying manual tags and hand-made people. The version check accepts older files rather than requiring an exact match, so exports written by 4.7.0 still import.
 - *Clear AI data* now says it removes manual person tags too, and does.
 
