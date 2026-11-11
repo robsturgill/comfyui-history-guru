@@ -2,7 +2,7 @@
 import {test, before, after} from 'node:test';
 import assert from 'node:assert/strict';
 import {request} from 'node:http';
-import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, rmSync, appendFileSync, readdirSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, rmSync, appendFileSync, readdirSync, ReadStream} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {gunzipSync} from 'node:zlib';
@@ -18,7 +18,7 @@ const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const mk = (rel, buf) => { mkdirSync(join(LIB, rel, '..'), {recursive: true}); writeFileSync(join(LIB, rel), buf) };
 const AUTH = 'Basic ' + Buffer.from('u:pw').toString('base64');
 
-let app, srv;
+let app, srv, FILE_LINK = false;
 const call = (path, {method = 'GET', headers = {}, body, guru = method !== 'GET' && method !== 'HEAD', raw = false} = {}) => new Promise((ok, no) => {
     const {port} = srv.address();
     const h = {authorization: AUTH, ...(guru ? {'x-guru': '1'} : {}), ...headers};
@@ -48,8 +48,12 @@ before(async () => {
     mk('vid.mp4', Buffer.from('0123456789abcdefghij'));
     mk('notes.txt', 'not media');
     mkdirSync(join(LIB, 'empty'));
-    symlinkSync(OUT, join(LIB, 'out'), 'dir');
-    symlinkSync(join(OUT, 'secret.png'), join(LIB, 'link.png'));
+    // 'junction' needs no privilege on Windows (it is ignored elsewhere). A FILE symlink does - without
+    // Developer Mode it throws EPERM, which used to fail this hook and with it all 34 tests in the file.
+    // The file-link assertions are skipped instead when the OS refuses.
+    symlinkSync(OUT, join(LIB, 'out'), 'junction');
+    try{ symlinkSync(join(OUT, 'secret.png'), join(LIB, 'link.png')); FILE_LINK = true }
+    catch(e){ if(e.code !== 'EPERM') throw e }
     app = createApp({host: '127.0.0.1', port: 0, dir: LIB, data: DATA, password: 'pw', allowedHosts: [], tlsCert: null, tlsKey: null});
     await new Promise(ok => app.listen(0, '127.0.0.1', ok));
     srv = app;
@@ -135,8 +139,10 @@ test('traversal, absolute paths, backslashes, NUL, ADS and Windows names are rej
 
 test('a symlinked folder or file pointing outside the library is unreachable', async () => {
     assert.equal((await call('/lib/out/secret.png')).status, 403);
-    assert.equal((await call('/lib/link.png')).status, 403);
-    assert.equal((await call('/api/hash?p=' + q('link.png'))).status, 403);
+    if(FILE_LINK){
+        assert.equal((await call('/lib/link.png')).status, 403);
+        assert.equal((await call('/api/hash?p=' + q('link.png'))).status, 403);
+    }
     // And not writable through them either.
     assert.equal((await call('/api/file?p=' + q('out/new.png'), {method: 'PUT', body: 'x'})).status, 403);
     assert.equal((await call('/api/file?p=' + q('out/secret.png'), {method: 'DELETE'})).status, 403);
@@ -144,7 +150,8 @@ test('a symlinked folder or file pointing outside the library is unreachable', a
     assert.ok(!existsSync(join(OUT, 'new.png')));
 });
 
-test('a leaf that is a symlink cannot be overwritten', async () => {
+test('a leaf that is a symlink cannot be overwritten', async t => {
+    if(!FILE_LINK) return t.skip('file symlinks need Developer Mode or admin on Windows');
     assert.equal((await call('/api/file?p=' + q('link.png'), {method: 'PUT', body: 'pwned'})).status, 403);
     assert.equal(readFileSync(join(OUT, 'secret.png'), 'utf8'), 'TOPSECRET');
 });
@@ -403,4 +410,42 @@ test('store: concurrent batches are serialised and none is lost', async () => {
     const s2 = new IndexStore(d); await s2.ready;
     assert.equal(s2.recs.size, 50);
     await s2.close();
+});
+
+// ------------------------------------------------------------------------------- file handles
+
+// Every aborted /lib read (a <video> seek, a thumbnail scrolled past, Analyze moving on) used to leak one
+// open file: serveFile did createReadStream().pipe(res), and pipe() never closes the source when the
+// response goes away. A large Analyze run then hit EMFILE, and the unhandled stream 'error' killed the
+// server. Counted on ReadStream itself, so it holds on every OS.
+test('an aborted /lib read closes its file', async () => {
+    mk('big.mp4', Buffer.alloc(8 * 1024 * 1024, 1));   // large enough to still be streaming at the abort
+    let opened = 0, closed = 0;
+    const emit = ReadStream.prototype.emit;
+    ReadStream.prototype.emit = function(ev, ...a){ if(ev === 'open') opened++; else if(ev === 'close') closed++; return emit.call(this, ev, ...a) };
+    try{
+        const one = range => new Promise(ok => {
+            const r = request({host: '127.0.0.1', port: srv.address().port, path: '/lib/big.mp4',
+                               headers: {authorization: AUTH, ...(range ? {range: 'bytes=0-'} : {})}}, res => {
+                res.once('data', () => { r.destroy(); ok() });
+            });
+            r.on('error', () => ok());
+            r.end();
+        });
+        for(let i = 0; i < 20; i++) await one(i % 2);
+        for(let i = 0; i < 50 && closed < opened; i++) await new Promise(r => setTimeout(r, 20));
+    }finally{ ReadStream.prototype.emit = emit }
+    assert.ok(opened >= 20, `only ${opened} streams opened - the test did not exercise serveFile`);
+    assert.equal(closed, opened, `${opened - closed} of ${opened} aborted reads left their file open`);
+});
+
+test('a file that fails to open mid-request does not take the server down', async () => {
+    mk('gone.png', PNG);
+    const {serveFile} = await import('./library.mjs');
+    const {createServer} = await import('node:http');
+    const s = createServer((req, res) => serveFile(req, res, join(LIB, 'no-such-file.png'), {size: 100}, 'image/png'));
+    await new Promise(ok => s.listen(0, '127.0.0.1', ok));
+    await new Promise(ok => request({host: '127.0.0.1', port: s.address().port}, r => { r.resume(); r.on('close', ok) }).on('error', ok).end());
+    assert.ok(s.listening, 'an unhandled ReadStream error would have crashed the process before this line');
+    s.close();
 });

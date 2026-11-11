@@ -9,6 +9,7 @@
 import {createReadStream, createWriteStream, realpathSync} from 'node:fs';
 import {lstat, readdir, realpath, rename, unlink, rmdir, mkdir, copyFile, stat} from 'node:fs/promises';
 import {pipeline} from 'node:stream/promises';
+import {pipeline as streamPipeline} from 'node:stream';
 import {Transform} from 'node:stream';
 import {createHash, randomBytes} from 'node:crypto';
 import {gzip, createGzip} from 'node:zlib';
@@ -63,11 +64,18 @@ export function serveFile(req, res, abs, st, type, headers = {}){
             'Content-Range': `bytes ${start}-${end}/${st.size}`
         });
         if(req.method === 'HEAD') return res.end();
-        return createReadStream(abs, {start, end}).pipe(res);
+        return sendStream(createReadStream(abs, {start, end}), res);
     }
     res.writeHead(200, {'Content-Type': type, 'Content-Length': st.size});
     if(req.method === 'HEAD') return res.end();
-    createReadStream(abs).pipe(res);
+    sendStream(createReadStream(abs), res);
+}
+// Never `.pipe()` a file into a response. pipe() neither closes the file when the client goes away nor
+// forwards a read error: every aborted request (a <video> seek, a thumbnail scrolled past, Analyze moving
+// on) leaked one open handle, and a large Analyze run then hit EMFILE - whose 'error' on the unhandled
+// ReadStream killed the whole server. pipeline() destroys both ends on abort or error.
+function sendStream(src, res){
+    streamPipeline(src, res, () => {});   // headers are already sent; a failure just ends the response
 }
 
 // ---------------------------------------------------------------------------------- path safety

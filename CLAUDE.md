@@ -588,6 +588,10 @@ Read these before touching either; they are the only code that lets a network cl
   checks both ends and never overwrites (409), except a case-only rename (same inode).
 - **`/api/tree` is the listing**, one call, cached 2s and dropped on every write. The short TTL is what
   lets files ComfyUI writes behind the server's back appear on refresh. Symlinks are skipped, not followed.
+- **Never `.pipe()` a file into a response** — `serveFile` uses `sendStream` (`stream.pipeline`). `pipe()`
+  doesn't close the file when the client aborts, and every `<video>` seek or cancelled thumbnail aborts: one
+  leaked handle per request, until a large Analyze run hit `EMFILE` and the unhandled `ReadStream` error
+  killed the server. `library.test.mjs` counts open/close on `ReadStream` and fails 20/20 without the fix.
 - **Hashing is server-side** (`/api/hash`, cached by size+mtime): a client must never pull a whole video to
   hash it, and `crypto.subtle` doesn't exist on a plain-HTTP LAN page, where the JS fallback hash would
   disagree with the host's SHA-256 inside the shared index.
