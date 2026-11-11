@@ -768,20 +768,23 @@ const rReserved=p=>p[0]==='_'&&!p.includes('.');
 // people). So the shadow remembers a hash of each top-level field as the server last had it, and a write
 // sends only the fields that differ from that. The app mutates records in place, which is why the shadow
 // holds hashes, not references.
-function rSigs(it){
+// `sh` given: keep the serialized text only for fields that differ from it. Retaining every field's text
+// (jt alone is ~111KB a record) for a whole batch is what ran a 20k-library re-group out of memory: the
+// cluster step queues ~every record to change `faces`, and the tab briefly held a second copy of the index.
+function rSigs(it,sh){
     const sigs=new Map(),raw=new Map();
     for(const k in it){
         if(k==='p')continue;
         const s=JSON.stringify(it[k],rEnc);
         if(s===undefined)continue;
-        sigs.set(k,rHash(s));raw.set(k,s);
+        const h=rHash(s);sigs.set(k,h);if(!sh||sh.get(k)!==h)raw.set(k,s);
     }
     return{sigs,raw};
 }
 const rJoin=(raw,keys)=>'{'+keys.map(k=>JSON.stringify(k)+':'+raw.get(k)).join(',')+'}';
 function rOp(p,it){
     if(it===null)return{body:`{"p":${JSON.stringify(p)},"del":true}`,commit:()=>R.shadow.delete(p)};
-    const {sigs,raw}=rSigs(it),sh=R.shadow.get(p),ifRev=rReserved(p)?`,"ifRev":${R.revs.get(p)||0}`:'';
+    const sh=R.shadow.get(p),{sigs,raw}=rSigs(it,sh),ifRev=rReserved(p)?`,"ifRev":${R.revs.get(p)||0}`:'';
     const commit=()=>R.shadow.set(p,sigs);
     // Never seen on the server: send it whole (also what a record re-created after a delete needs).
     if(!sh)return{body:`{"p":${JSON.stringify(p)},"rec":${rJoin(raw,[...raw.keys()])}${ifRev}}`,commit,p,raw,changed:[...raw.keys()],gone:[]};
@@ -790,12 +793,14 @@ function rOp(p,it){
     return{body:`{"p":${JSON.stringify(p)},"set":${rJoin(raw,changed)}${gone.length?`,"unset":${JSON.stringify(gone)}`:''}${ifRev}}`,commit,p,raw,changed,gone};
 }
 async function rSend(batch){
-    const ops=[];
-    for(const [p,it] of batch){const o=rOp(p,it);if(o)ops.push(o)}
-    // Chunked so one 10k-record Analyze run isn't one multi-hundred-MB request.
-    for(let i=0;i<ops.length;){
-        let n=0,j=i;while(j<ops.length&&(j===i||n<3e6)){n+=ops[j].body.length;j++}
-        const part=ops.slice(i,j);i=j;
+    // Ops are built one ~3MB chunk at a time, never for the whole batch up front: a batch can be every
+    // record in the library (a re-group, or a first scan's coalesced puts), and each new record's op holds
+    // its full body - building them all first doubled the index in memory.
+    const ent=batch[Symbol.iterator]();let nx=ent.next();
+    while(!nx.done){
+        const part=[];let n=0;
+        while(!nx.done&&(!part.length||n<3e6)){const [p,it]=nx.value;nx=ent.next();const o=rOp(p,it);if(o){part.push(o);n+=o.body.length}}
+        if(!part.length)break;
         let res=await(await rApi('/api/index',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"ops":['+part.map(o=>o.body).join(',')+']}'})).json();
         for(const [p,r] of Object.entries(res.revs||{}))R.revs.set(p,r);
         const lost=new Set((res.conflicts||[]).map(c=>c.p));
@@ -911,7 +916,11 @@ const iDB=()=>REMOTE?Promise.resolve():new Promise((r,j)=>{const q=indexedDB.ope
 const dPut=i=>REMOTE?rPut(i):new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").put(i);t.oncomplete=r});
 const dDel=k=>REMOTE?rDel(k):new Promise(r=>{const t=db.transaction("i","readwrite");t.objectStore("i").delete(k);t.oncomplete=r});
 // One transaction for the whole array - a per-item dPut over a 10k-item analysis run is 10k transactions.
-const dPutMany=a=>REMOTE?rPutMany(a):new Promise(r=>{const t=db.transaction("i","readwrite"),s=t.objectStore("i");for(const i of a)s.put(i);t.oncomplete=r});
+// One transaction per 250 records: put() structured-clones each record when it is queued, and a re-group
+// hands over nearly the whole library (~111KB of jt apiece), which in one transaction is a second copy of
+// the index held until commit. Still resolves only once everything is committed.
+const dPutMany=async a=>{if(REMOTE)return rPutMany(a);
+    for(let k=0;k<a.length;k+=250)await new Promise(r=>{const t=db.transaction("i","readwrite"),s=t.objectStore("i");for(const i of a.slice(k,k+250))s.put(i);t.oncomplete=r})};
 // Keys starting '_' are reserved app-level records (the '__ai__' sentinel), not cache entries - they
 // share store "i" so the schema stays at version 1, so they have to be split back out here. The
 // extra no-'.' test is what makes this safe: every cache key is a path ending in a media extension,

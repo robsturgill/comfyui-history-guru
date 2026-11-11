@@ -647,8 +647,20 @@ Inert unless `remoteBoot()` (last line of the script) gets `{library:true}` from
   server-backed wrappers would write foreign paths into the shared index.
 - **The `db={...}` stub recipe above does not apply here**: in library mode there is no `db`, writes go to
   the server. Test against a *copy* of the library (`--dir <copy>`), never the real one.
-- **Index size is the scaling limit.** `jt` averages ~115 KB/record on `samples/` (~1 GB per 10k images),
-  held in server memory and downloaded in full by every client on load.
+- **Index size is the scaling limit.** `jt` averages ~111 KB/record on `samples/` (~2.2 GB of JS heap at
+  20k images), held in server memory and downloaded in full by every client on load. Chrome caps a tab's
+  heap near 4 GB, so **any code path that briefly copies the index runs a big library out of memory**:
+  - `rSend` used to build ops for the whole batch up front, and `rSigs` kept every field's serialized text.
+    A re-group queues ~every record (to change `faces`), so the tab held a second copy: measured +592 MB on
+    a 553 MB heap at 5k. Now ops are built one ~3 MB chunk at a time and only *changed* fields keep their
+    text: +33 MB at 5k, +96 MB at 20k (2.2 GB base). Same cure for a first scan's whole-record batch
+    (+710 MB → +41 MB at 3k).
+  - Local mode: `dPutMany` commits per 250 records — `put()` clones each record when queued, so one
+    transaction over the library is the same copy, held outside the JS heap where `usedJSHeapSize`
+    can't even see it.
+  - Measure with a seeded page (unique ~111 KB `jt` per record, `R.shadow` seeded via `rSigs`, `fetch`
+    stubbed for `POST /api/index`) and Chromium `--enable-precise-memory-info --js-flags=--expose-gc`.
+    Keeping `jt` out of page memory entirely is the real fix for libraries well past 20k.
 
 Everything is behind `aiOK()`. Opened by double-click the app behaves **exactly as before**; the only
 delta is a dimmed 🧠 button. `localStorage['guru-ai']='off'` is a hard kill switch.
