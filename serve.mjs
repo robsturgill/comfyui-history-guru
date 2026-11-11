@@ -13,12 +13,13 @@
 
 import {createServer as createHttp} from 'node:http';
 import {createServer as createHttps} from 'node:https';
-import {createReadStream, statSync, readFileSync, existsSync} from 'node:fs';
+import {statSync, readFileSync, existsSync} from 'node:fs';
 import {extname, normalize, join, sep, resolve, dirname} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {createHash, timingSafeEqual, scrypt, randomBytes} from 'node:crypto';
 import {isIP} from 'node:net';
 import {hostname as osHostname, networkInterfaces} from 'node:os';
+import {MIME, send, serveFile, createLibrary} from './library.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url)).replace(/[\\/]$/, '');
 const APP = 'Guru Manager ChromeEdge Edition.html';
@@ -26,18 +27,6 @@ const APP = 'Guru Manager ChromeEdge Edition.html';
 // (password), data/ (the shared index) and .git live in the same tree and must never be downloadable.
 const STATIC_FILES = new Set(['/' + APP, '/ai-check.html']);
 const STATIC_PREFIX = '/ai/';
-
-const MIME = {
-    '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
-    '.mjs':'text/javascript; charset=utf-8', '.json':'application/json; charset=utf-8',
-    '.css':'text/css; charset=utf-8', '.txt':'text/plain; charset=utf-8', '.md':'text/plain; charset=utf-8',
-    // Must be exactly application/wasm or streaming instantiation refuses the module.
-    '.wasm':'application/wasm',
-    '.onnx':'application/octet-stream', '.bin':'application/octet-stream',
-    '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp',
-    '.gif':'image/gif', '.svg':'image/svg+xml', '.ico':'image/x-icon',
-    '.mp4':'video/mp4', '.webm':'video/webm', '.mov':'video/quicktime', '.mkv':'video/x-matroska'
-};
 
 // ---------------------------------------------------------------------------------------- config
 
@@ -220,13 +209,9 @@ function makeHostCheck(cfg){
 
 // --------------------------------------------------------------------------------------- server
 
-const send = (res, code, body, type = 'text/plain; charset=utf-8', extra = {}) => {
-    res.writeHead(code, {'Content-Type': type, 'Content-Length': Buffer.byteLength(body), ...extra});
-    res.end(body);
-};
-
 export function createApp(cfg){
     const auth = makeAuth(cfg), hostOK = makeHostCheck(cfg);
+    const lib = cfg.dir ? createLibrary(cfg) : null;
     const handler = async (req, res) => {
         // COOP+COEP make the page crossOriginIsolated, which is what unlocks SharedArrayBuffer and so
         // multi-threaded WASM. That's a 2-4x win on the CPU fallback path and costs nothing here since
@@ -245,7 +230,10 @@ export function createApp(cfg){
         try{ p = decodeURIComponent(new URL(req.url, 'http://x').pathname) }
         catch{ return send(res, 400, 'Bad request') }
 
-        if(p === '/api/config')
+        // /api/* and /lib/* belong to library mode. Without --dir the probe still answers, so the page can
+        // tell "plain server" from "no server at all (file://)".
+        if(lib){ if(await lib.handle(req, res, p, new URL(req.url, 'http://x'))) return }
+        else if(p === '/api/config')
             return send(res, 200, JSON.stringify({library: false}), 'application/json; charset=utf-8', {'Cache-Control': 'no-store'});
 
         if(p === '/' || p === '') p = '/' + APP;
@@ -271,35 +259,17 @@ export function createApp(cfg){
         // ai-worker.js, ai/src/*.js, manifest.json - and is edited constantly. A broad `/ai/*.js` rule
         // silently pins ai-worker.js for a year, so edits appear to do nothing and you debug ghosts.
         const immutable = p.startsWith('/ai/ort/') || /^\/ai\/models\/.+\.(onnx|bin)$/i.test(p);
-        res.setHeader('Cache-Control', immutable ? 'public, max-age=31536000, immutable' : 'no-store');
-
-        // Range support, so <video> can seek.
-        const range = req.headers.range;
-        if(range && /^bytes=\d*-\d*$/.test(range)){
-            const [s, e] = range.slice(6).split('-');
-            const start = s ? +s : 0, end = e ? Math.min(+e, st.size - 1) : st.size - 1;
-            if(start >= st.size || start > end){
-                res.writeHead(416, {'Content-Range': `bytes */${st.size}`});
-                return res.end();
-            }
-            res.writeHead(206, {
-                'Content-Type': type, 'Content-Length': end - start + 1,
-                'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Accept-Ranges': 'bytes'
-            });
-            return createReadStream(abs, {start, end}).pipe(res);
-        }
-
-        res.writeHead(200, {'Content-Type': type, 'Content-Length': st.size, 'Accept-Ranges': 'bytes'});
-        if(req.method === 'HEAD') return res.end();
-        createReadStream(abs).pipe(res);
+        serveFile(req, res, abs, st, type, {'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-store'});
     };
     const wrapped = (req, res) => handler(req, res).catch(e => {
         console.error('  request failed:', req.method, req.url, e && e.message);
         if(!res.headersSent) send(res, 500, 'Internal error'); else res.destroy();
     });
-    return cfg.tlsCert
+    const srv = cfg.tlsCert
         ? createHttps({cert: readFileSync(cfg.tlsCert), key: readFileSync(cfg.tlsKey)}, wrapped)
         : createHttp(wrapped);
+    srv.library = lib;
+    return srv;
 }
 
 // ----------------------------------------------------------------------------------------- main
@@ -320,7 +290,13 @@ async function main(){
     if(err){ console.error('\n  ' + err + '\n'); process.exit(1) }
 
     const tls = !!cfg.tlsCert, scheme = tls ? 'https' : 'http';
-    createApp(cfg)
+    const app = createApp(cfg);
+    // Replay the index before accepting connections, so a corrupt journal fails loudly at startup.
+    if(app.library){
+        try{ await app.library.ready }
+        catch(e){ console.error(`\n  Cannot open the index in ${cfg.data}: ${e.message}\n`); process.exit(1) }
+    }
+    app
     .on('error', e => {
         if(e.code === 'EADDRINUSE'){
             console.error(`\n  Port ${cfg.port} is already in use.\n\n` +
@@ -335,6 +311,11 @@ async function main(){
         const local = isLoopback(cfg.host);
         console.log(`\n  Guru Manager  ->  ${scheme}://${local ? cfg.host : 'localhost'}:${cfg.port}/\n`);
         console.log(`  Serving ${ROOT}`);
+        if(app.library){
+            const st = app.library.store;
+            console.log(`  Library ${app.library.dir}`);
+            console.log(`  Index   ${st.recs.size} records, ${cfg.data}${st.corrupt ? `  (${st.corrupt} unreadable line(s) skipped; a .bak was kept)` : ''}`);
+        }
         if(cfg.configPath) console.log(`  Config  ${cfg.configPath}`);
         if(local){
             console.log(`  Bound to ${cfg.host} only - not reachable from the network.`);

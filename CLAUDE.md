@@ -532,8 +532,35 @@ node serve.mjs        # then open http://127.0.0.1:8787
 Readme "Server options"). Invariants: a non-loopback bind and `--dir` both **refuse to start
 without a password**; every request is Basic-authed and Host-checked (DNS rebinding); static files
 are an **allowlist** (app, `ai-check.html`, `ai/**`), never "everything under ROOT", because the
-config file and `data/` sit in the same tree. `node --test serve.test.mjs` covers it. Both
+config file and `data/` sit in the same tree. `node --test serve.test.mjs library.test.mjs` covers it. Both
 `createApp(cfg)` and `loadConfig()` are exported so tests need no child process.
+
+### Library mode (`--dir`) — `library.mjs`, `index-store.mjs`
+
+Read these before touching either; they are the only code that lets a network client touch the disk.
+
+- **Two gates for every path.** `cleanRel()` is syntax (no `..`, `.`, empty segments, `\`, NUL, `:` for
+  NTFS streams, Windows reserved names, trailing dot/space). `resolveExisting()` / `resolveNew()` is
+  location: `realpath`, then require it inside the library. A *new* target can't be `realpath`'d, so
+  `resolveNew` resolves the **parent**, checks that, and `lstat`s the leaf to refuse a symlink. Don't
+  shortcut either one.
+- **Writes and deletes are media-only** (`RX_MEDIA`, which must stay identical to the app's). `/api/move`
+  checks both ends and never overwrites (409), except a case-only rename (same inode).
+- **`/api/tree` is the listing**, one call, cached 2s and dropped on every write. The short TTL is what
+  lets files ComfyUI writes behind the server's back appear on refresh. Symlinks are skipped, not followed.
+- **Hashing is server-side** (`/api/hash`, cached by size+mtime): a client must never pull a whole video to
+  hash it, and `crypto.subtle` doesn't exist on a plain-HTTP LAN page, where the JS fallback hash would
+  disagree with the host's SHA-256 inside the shared index.
+- **The index is diffs, not records.** A client's snapshot goes stale; writing whole records back erases
+  whatever another device added since (embeddings, faces, `pA`/`pR`). `{p,set,unset}` touches only named
+  fields. `ifRev` makes a write conditional (used for `__ai__`); a conflict returns the current copy.
+  Manual-person ids come from `POST /api/nextm`, never a local counter.
+- **The server never interprets records.** Typed arrays arrive already encoded as
+  `{$ta:'Int8Array',b64}`. Memory holds every record as an object, and `jt` (up to `JT_CAP` chars) is the
+  bulk of it, so measure before assuming it scales.
+- **Journal rules:** one serialised writer; memory is committed only after the line is fsynced; startup
+  compacts via temp file + rename and keeps `.bak.N` of what it replaced (the only backup the index has).
+  `/api/*` and `/lib/*` are only mounted when `--dir` is set.
 
 Everything is behind `aiOK()`. Opened by double-click the app behaves **exactly as before**; the only
 delta is a dimmed 🧠 button. `localStorage['guru-ai']='off'` is a hard kill switch.

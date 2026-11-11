@@ -152,7 +152,19 @@ Opened the old way, the app behaves exactly as before, with the 🧠 button dimm
 *   **`Host` is checked** (IP literals, `localhost` and this machine's hostname pass; add a DNS name with `--allow-host`), which blocks DNS-rebinding from a hostile web page.
 *   **Only the app and `ai/` are served.** The config file, `data/`, `.git` and `samples/` are not downloadable.
 
-> Hosting a library for other devices (`--dir`) is being built in stages; until it lands, `--dir` is parsed and validated (it requires a password) but does nothing yet.
+### Hosting a library (`--dir`)
+
+`node serve.mjs --dir D:\ComfyUI\output --lan` serves that folder, and holds the index, for every device
+that can reach the machine. `--dir` always requires a password. The server only *serves and stores*: the
+scan and the AI analysis still run in a browser (WebNN/ORT are browser APIs), so open the server on the
+GPU machine, click Analyze there, and the results are saved on the server for everyone.
+
+*   **Shared index.** Parsed metadata, embeddings, faces and people live in `data/index.jsonl` (append-only journal, compacted at startup, last three versions kept as `index.jsonl.bak.N`). Clients send field-level diffs, so a stale device cannot erase what another wrote.
+*   **File API.** `/api/tree`, `/lib/<path>` (Range-aware, ETag revalidated), `PUT`/`DELETE /api/file`, `POST /api/move`, `POST /api/mkdir`, `DELETE /api/dir`, `GET /api/hash`. Writes and deletes only ever touch media extensions (`png jpg jpeg webp gif mp4 webm mov mkv`).
+*   **Contained.** Paths are validated, symlinks are never followed or listed, and anything resolving outside `--dir` is refused, including through a symlinked folder or file. Moves never overwrite.
+*   **CSRF.** Every mutating request must carry `X-Guru: 1` (which forces a CORS preflight that is never granted) and a same-host `Origin`.
+
+> The page does not use this yet: the browser side is the next step, so for now the API is exercised by the tests only.
 
 ---
 
